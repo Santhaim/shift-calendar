@@ -467,17 +467,20 @@ function render() {
 }
 
 // ---------- 시트 ----------
-let sheetClick = null, sheetLocked = false, sheetTimer = 0;
-function openSheet(html, onClick, locked = false) {
+let sheetClick = null, sheetLocked = false, sheetTimer = 0, sheetBeforeClose = null;
+// beforeClose: 「완료」가 아니라 뒤로 가기·바깥 터치로 닫혀도 꼭 할 일(날짜 창 = 메모 저장 · 10-09 쓰던 메모가 사라짐)
+function openSheet(html, onClick, locked = false, beforeClose = null) {
   const w = $('#sheetWrap');
   clearTimeout(sheetTimer);
   $('#sheet').innerHTML = html;
-  sheetClick = onClick; sheetLocked = locked;
+  sheetClick = onClick; sheetLocked = locked; sheetBeforeClose = beforeClose;
   if (w.hidden) { w.hidden = false; void w.offsetWidth; }
   w.classList.add('open');
 }
 function closeSheet() {
-  const w = $('#sheetWrap');
+  const w = $('#sheetWrap'), before = sheetBeforeClose;
+  sheetBeforeClose = null;
+  if (before) try { before(); } catch (e) {}
   w.classList.remove('open'); sheetClick = null; sheetLocked = false;
   clearTimeout(sheetTimer);
   sheetTimer = setTimeout(() => { w.hidden = true; $('#sheet').innerHTML = ''; }, 230);
@@ -529,8 +532,8 @@ function openDay(k, pid) {
       commitDay(k); save(); render(); openDay(k, pid);
     } else if (act === 'resetOv') {
       delete p.overrides[k]; commitDay(k); save(); render(); openDay(k, pid);
-    } else if (act === 'done') { commitDay(k); save(); closeSheet(); }
-  });
+    } else if (act === 'done') closeSheet();  // 저장은 beforeClose 가
+  }, false, () => { commitDay(k); save(); });
   function commitDay(key) {
     const mt = $('#dayMemo'), ht = $('#dayHol');
     if (mt) {
@@ -883,12 +886,26 @@ $('#main').addEventListener('touchend', e => {
   if (Math.abs(dx) > 60 && Math.abs(dy) < 50) moveMonth(dx < 0 ? 1 : -1);
 }, { passive: true });
 
-// 안드로이드 뒤로 가기 — 열린 창이 있으면 닫기만
+// 뒤로 가기 — 열린 창이 있으면 (저장하고) 닫기만. false 면 「종료할까요?」
+//   앱: MainActivity.onBackPressed 가 부르고, false 면 네이티브 확인 창
+//   웹앱: 아래 history 가드가 부른다
 window.onAndroidBack = () => {
   if ($('#sheetWrap').hidden || !$('#sheetWrap').classList.contains('open')) return false;
   if (!sheetLocked) closeSheet();
   return true;
 };
+if (!NATIVE) {
+  // 설치한 웹앱은 기록이 하나뿐이라 뒤로 가기 = 즉시 종료 → 가드 기록을 하나 얹어 두고 popstate 에서 가로챈다.
+  // 크롬은 «사용자 조작 없이» 쌓은 기록을 건너뛰므로 가드는 터치·키 입력 때 얹는다.
+  const arm = () => { if (!history.state || history.state.sc !== 'guard') history.pushState({ sc: 'guard' }, ''); };
+  document.addEventListener('pointerdown', arm, true);
+  document.addEventListener('keydown', arm, true);
+  window.addEventListener('popstate', () => {
+    if (history.state && history.state.sc === 'guard') return;
+    if (window.onAndroidBack()) { arm(); return; }
+    if (confirm('근무달력을 종료할까요?')) history.back(); else arm();
+  });
+}
 
 // ---------- 웹앱: 공휴일 표 받아 오기 ----------
 // holidays.json = tools/fetch_holidays.py 결과(GitHub Actions 가 하루 한 번 갱신). 앱(NATIVE)은 폰 캘린더를 쓰므로 안 받는다.
