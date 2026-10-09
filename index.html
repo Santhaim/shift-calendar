@@ -1,0 +1,913 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#121316" media="(prefers-color-scheme: dark)">
+<title>근무달력</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<style>
+:root{--bg:#fff;--fg:#1f2328;--sub:#8b9096;--line:#eceef1;--soft:#f4f5f7;--sun:#e5484d;--sat:#2f6fec;--accent:#1677ff;--sel:#e8f1ff;--holbg:#ffe1e5;--mine:#fffbe6;--sheet:#fff}
+@media (prefers-color-scheme:dark){:root{--bg:#121316;--fg:#e9eaec;--sub:#8a8f98;--line:#2a2c31;--soft:#1f2125;--sun:#ff6b70;--sat:#6e9bff;--accent:#4d94ff;--sel:#1b2a44;--holbg:#3a1f25;--mine:#26230f;--sheet:#1c1e22}}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--fg);font-family:-apple-system,"Apple SD Gothic Neo","Noto Sans KR","Malgun Gothic",sans-serif}
+body{max-width:640px;margin:0 auto;min-height:100dvh;padding-bottom:calc(66px + env(safe-area-inset-bottom))}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;padding:0}
+.top{position:sticky;top:0;z-index:5;background:var(--bg);display:flex;align-items:center;gap:2px;padding:calc(10px + env(safe-area-inset-top)) 10px 8px;height:calc(56px + env(safe-area-inset-top))}
+.top h1{margin:0}
+#title{font-size:23px;font-weight:800;letter-spacing:-.5px;padding:4px 6px;border-radius:8px}
+#title:active{background:var(--soft)}
+.icon-btn{width:38px;height:38px;font-size:28px;line-height:1;border-radius:50%;color:var(--sub)}
+.pill{margin-left:auto;padding:7px 14px;border-radius:999px;background:var(--soft);font-size:14px;font-weight:700}
+.top.noNav .icon-btn,.top.noNav .pill{visibility:hidden}
+.tab{display:none}.tab.active{display:block}
+.dow{display:grid;grid-template-columns:repeat(7,1fr);text-align:center;font-size:13px;padding:6px 0;border-bottom:1px solid var(--line);position:sticky;top:calc(56px + env(safe-area-inset-top));background:var(--bg);z-index:4}
+.dow span:first-child{color:var(--sun)}.dow span:last-child{color:var(--sat)}
+/* 내 달력 = 한 화면에 꽉 차게(높이는 fitCal 이 --calH 로 준다) */
+#tab-cal.active{display:flex;flex-direction:column;height:var(--calH,auto)}
+.grid{display:grid;grid-template-columns:repeat(7,1fr);flex:1;min-height:0}
+.cell{border-right:1px solid var(--line);border-bottom:1px solid var(--line);min-width:0;min-height:0;overflow:hidden;padding:3px 2px 4px;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;position:relative}
+.grid.w6 .memo{-webkit-line-clamp:2}
+.mcolors{display:flex;flex-wrap:wrap;gap:7px;margin-top:10px}
+.mc{width:28px;height:28px;border-radius:50%;border:2px solid transparent;box-shadow:0 0 0 1px var(--line)}
+.mc:first-child{width:auto;padding:0 10px;border-radius:16px;background:var(--soft);font-size:12px;color:var(--sub)}
+.mc.on{border-color:var(--bg);box-shadow:0 0 0 2.5px var(--fg)}
+.cell:nth-child(7n){border-right:0}
+.cell.out>*{opacity:.35}
+.cell.today{background:var(--sel);box-shadow:inset 0 0 0 2px var(--accent)}
+.dn{align-self:stretch;display:flex;align-items:center;gap:2px;font-size:13px;padding:1px 3px;border-radius:4px;min-height:19px;font-weight:600}
+.dn.sun{color:var(--sun)}.dn.sat{color:var(--sat)}.dn.holi{background:var(--holbg);color:var(--sun)}
+.hol{font-size:9.5px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;margin-left:auto}
+.hol.anni,.th small.anni{color:var(--sub)}
+.sh{position:relative;display:flex;justify-content:center;min-height:34px}
+.ov{position:absolute;top:-2px;right:-7px;width:7px;height:7px;border-radius:50%;background:var(--accent)}
+.b{display:inline-flex;align-items:center;justify-content:center;font-weight:800;flex:none;line-height:1}
+.b.fill{width:34px;height:34px;border-radius:50%;font-size:16px}
+.b.text{height:34px;min-width:20px;font-size:18px}
+.b.sm.fill{width:26px;height:26px;font-size:13px}.b.sm.text{height:26px;font-size:15px}
+.memo{align-self:stretch;font-size:10px;line-height:1.3;background:var(--soft);border-radius:4px;padding:2px 3px;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;word-break:break-all;white-space:pre-wrap}
+.stats{flex:none;display:flex;flex-wrap:wrap;gap:4px 14px;padding:7px 14px;border-bottom:1px solid var(--line);font-size:14px;align-items:center}
+.stats .st{display:flex;align-items:center;gap:6px}
+.stats .t{color:var(--sub);font-size:13px}
+.mmemo{flex:none;padding:8px 14px}
+.mmemo textarea{min-height:0;height:58px;resize:none;font-size:15px;padding:8px 10px}
+/* 년·월 휠 */
+.wheels{position:relative;isolation:isolate;display:grid;grid-template-columns:1fr 1fr;height:220px;margin-top:14px;-webkit-mask-image:linear-gradient(transparent,#000 30%,#000 70%,transparent);mask-image:linear-gradient(transparent,#000 30%,#000 70%,transparent)}
+.wheel{overflow-y:scroll;scroll-snap-type:y mandatory;scrollbar-width:none;overscroll-behavior:contain}
+.wheel::-webkit-scrollbar{display:none}
+.wheel .sp{height:88px}
+.wi{height:44px;line-height:44px;text-align:center;scroll-snap-align:center;font-size:22px;color:var(--sub);cursor:pointer}
+.wi.on{color:var(--fg);font-weight:800;font-size:26px}
+.wsel{position:absolute;left:8px;right:8px;top:88px;height:44px;border-radius:10px;background:var(--soft);z-index:-1}
+.calrow{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--line);font-size:14px}
+.calrow:last-of-type{border-bottom:0}
+.calrow input{width:20px;height:20px;flex:none}
+.calrow .nm{flex:1;min-width:0}
+.calrow .nm small{display:block;color:var(--sub);font-size:11.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* 근무자 표 */
+.team-dow{display:grid;grid-template-columns:78px repeat(7,1fr);text-align:center;font-size:13px;padding:6px 0;border-bottom:1px solid var(--line);position:sticky;top:calc(56px + env(safe-area-inset-top));background:var(--bg);z-index:4}
+.team-dow span:nth-child(2){color:var(--sun)}.team-dow span:last-child{color:var(--sat)}
+.tw{border-bottom:6px solid var(--soft)}
+.trow{display:grid;grid-template-columns:78px repeat(7,1fr);min-height:44px;border-bottom:1px solid var(--line)}
+.trow:last-child{border-bottom:0}
+.trow.head{min-height:28px;font-size:13px;font-weight:600}
+.trow.mine{background:var(--mine)}
+.tname{font-size:12.5px;padding:0 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border-right:1px solid var(--line);display:flex;align-items:center;cursor:pointer}
+.tc,.th{display:flex;justify-content:center;align-items:center;min-width:0;cursor:pointer}
+.th{gap:2px;padding:0 2px;overflow:hidden}.th small{font-size:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:500}
+.th.sun{color:var(--sun)}.th.sat{color:var(--sat)}
+.tc.out>*,.th.out{opacity:.35}
+.tc.today,.th.today{background:var(--sel)}
+.empty{padding:28px 20px;text-align:center;color:var(--sub);font-size:14px;line-height:1.6}
+.wide-btn{display:block;width:calc(100% - 28px);margin:14px;padding:13px;border-radius:12px;border:1.5px dashed var(--line);font-weight:700;color:var(--accent)}
+/* 설정 */
+.card{margin:12px 14px;padding:14px;border-radius:14px;background:var(--soft)}
+.card-h{font-weight:800;font-size:15px;margin-bottom:10px}
+.hint{font-size:13px;color:var(--sub);line-height:1.5;margin:0 0 10px}
+.btns{display:flex;flex-wrap:wrap;gap:8px}
+.btn{padding:10px 14px;border-radius:10px;background:var(--bg);border:1px solid var(--line);font-weight:600;font-size:14px;cursor:pointer;display:inline-block}
+.btn.danger,.danger{color:var(--sun)}
+.trow2{display:grid;grid-template-columns:30px 44px 1fr 40px 62px 28px;gap:6px;align-items:center;margin-bottom:8px}
+.trow2 input,.trow2 select{min-width:0;padding:8px 6px;font-size:14px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--fg);font-family:inherit}
+.trow2 input[type=color]{padding:2px;height:36px}
+.rowb{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:10px}
+/* 하단 탭 */
+.tabs{position:fixed;bottom:0;left:0;right:0;max-width:640px;margin:0 auto;display:grid;grid-template-columns:repeat(3,1fr);background:var(--bg);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom);z-index:6}
+.tabs button{display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 0 7px;font-size:11px;color:var(--sub)}
+.tabs button.active{color:var(--accent);font-weight:700}
+.tabs svg{width:24px;height:24px}
+/* 시트 */
+.sheet-wrap{position:fixed;inset:0;background:rgba(0,0,0,0);z-index:20;display:flex;align-items:flex-end;justify-content:center;transition:background .2s}
+.sheet-wrap[hidden]{display:none}
+.sheet-wrap.open{background:rgba(0,0,0,.4)}
+.sheet{width:100%;max-width:640px;max-height:90dvh;overflow:auto;background:var(--sheet);border-radius:18px 18px 0 0;padding:18px 16px calc(18px + env(safe-area-inset-bottom));transform:translateY(100%);transition:transform .22s ease}
+.sheet-wrap.open .sheet{transform:none}
+.sh-title{font-size:19px;font-weight:800;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.tag{font-size:13px;font-weight:600;padding:4px 9px;border-radius:7px;background:var(--holbg);color:var(--sun);line-height:1.35}
+.tag.gray{background:var(--soft);color:var(--sub);font-weight:500}
+.sh-title .who{font-size:13px;font-weight:600;color:var(--sub)}
+.lbl{font-size:13px;color:var(--sub);margin:16px 0 8px;display:flex;align-items:center;gap:6px;font-weight:600}
+.badge-ov{font-size:11px;padding:2px 7px;border-radius:6px;background:var(--sel);color:var(--accent)}
+input[type=text],input[type=date],textarea{width:100%;font:inherit;font-size:16px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--fg)}
+textarea{min-height:90px;resize:vertical}
+.types{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.tbtn{display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px 2px;border-radius:12px;border:1.5px solid var(--line);font-size:12px;min-height:66px;justify-content:center}
+.tbtn.sel{border-color:var(--accent);background:var(--sel)}
+.tbtn .none{height:26px;display:flex;align-items:center;font-size:18px;color:var(--sub)}
+.link{color:var(--accent);font-size:14px;font-weight:600;margin-top:10px}
+.actions{display:flex;gap:8px;margin-top:20px}
+.primary{flex:1;background:var(--accent);color:#fff;font-weight:700;padding:13px;border-radius:12px;font-size:16px}
+.ghost{padding:13px 16px;border-radius:12px;background:var(--soft);font-weight:600}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{padding:8px 12px;border-radius:999px;background:var(--soft);font-size:14px;font-weight:600}
+.seq{display:flex;flex-wrap:wrap;gap:6px;min-height:52px;padding:6px;border:1.5px dashed var(--line);border-radius:12px;align-items:center}
+.seq .it{display:flex;flex-direction:column;align-items:center;gap:2px;font-size:10px;color:var(--sub);padding:3px;border-radius:8px;border:2px solid transparent}
+.seq .it.on{border-color:var(--accent);background:var(--sel);color:var(--accent);font-weight:700}
+.sub{font-size:12px;color:var(--sub);font-weight:400}
+.pv{overflow-x:auto;display:grid;grid-auto-flow:column;grid-auto-columns:36px;gap:2px;padding-bottom:4px}
+.pv .c{display:flex;flex-direction:column;align-items:center;gap:3px;font-size:11px;padding:3px 0;border-radius:6px}
+.pv .c.today{background:var(--sel)}
+.pv .c .sun{color:var(--sun)}.pv .c .sat{color:var(--sat)}
+.pv .rl{font-size:10px;color:var(--sub)}
+details summary{cursor:pointer}
+.toast{position:fixed;left:50%;bottom:calc(84px + env(safe-area-inset-bottom));transform:translateX(-50%) translateY(20px);background:rgba(30,30,30,.92);color:#fff;padding:10px 16px;border-radius:10px;font-size:14px;opacity:0;pointer-events:none;transition:.2s;z-index:30;max-width:90vw;text-align:center}
+.toast.on{opacity:1;transform:translateX(-50%)}
+.codebox{font-family:ui-monospace,Consolas,monospace;font-size:12px;word-break:break-all;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px;max-height:120px;overflow:auto;user-select:all}
+</style>
+</head>
+<body>
+<header class="top" id="top">
+  <button id="prev" class="icon-btn" aria-label="이전 달">‹</button>
+  <h1><button id="title" aria-label="년·월 선택"></button></h1>
+  <button id="next" class="icon-btn" aria-label="다음 달">›</button>
+  <button id="todayBtn" class="pill">오늘</button>
+</header>
+
+<main id="main">
+  <section id="tab-cal" class="tab active">
+    <div class="dow"><span>일</span><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span>토</span></div>
+    <div id="grid" class="grid"></div>
+    <div id="stats" class="stats"></div>
+    <div class="mmemo"><textarea id="monthMemo" placeholder="월별 메모"></textarea></div>
+  </section>
+  <section id="tab-team" class="tab">
+    <div class="team-dow"><span></span><span>일</span><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span>토</span></div>
+    <div id="team"></div>
+    <button id="addPerson" class="wide-btn">+ 근무자 추가</button>
+  </section>
+  <section id="tab-set" class="tab"><div id="settings"></div></section>
+</main>
+
+<nav class="tabs">
+  <button data-tab="cal" class="active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/></svg><span>내 달력</span></button>
+  <button data-tab="team"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.6-3.6 3.3-5.5 6.5-5.5s5.9 1.9 6.5 5.5"/><circle cx="17" cy="9" r="2.6"/><path d="M17 14.3c2.4.2 4 1.8 4.5 4.7"/></svg><span>근무자</span></button>
+  <button data-tab="set"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M12 2.5v2.5M12 19v2.5M4.6 4.6l1.8 1.8M17.6 17.6l1.8 1.8M2.5 12H5M19 12h2.5M4.6 19.4l1.8-1.8M17.6 6.4l1.8-1.8"/></svg><span>설정</span></button>
+</nav>
+
+<div id="sheetWrap" class="sheet-wrap" hidden><div class="sheet" id="sheet"></div></div>
+<div id="toast" class="toast"></div>
+<!-- 백업 불러오기용 — 설정 화면 «밖»에 고정(파일 고르고 돌아오면 설정이 다시 그려져 안에 두면 버려진다 · 10-09) -->
+<input type="file" id="importFile" accept=".json,application/json" hidden>
+
+<script>
+'use strict';
+const KEY = 'shiftcal.v1';
+
+const DEFAULT_TYPES = [
+  { id: 'D', label: '주', name: '주간', color: '#FFD400', kind: 'fill' },
+  { id: 'N', label: '야', name: '야간', color: '#3A3A3A', kind: 'fill' },
+  { id: 'O', label: '비', name: '비번', color: '#E0457B', kind: 'text' },
+  { id: 'R', label: '휴', name: '휴무', color: '#E5484D', kind: 'text' },
+  { id: 'V', label: '연', name: '연차', color: '#2E7DFF', kind: 'fill' },
+  { id: 'E', label: '교', name: '교육', color: '#21A366', kind: 'fill' },
+];
+
+const PRESETS = [
+  { name: '주주야야비휴', seq: ['D', 'D', 'N', 'N', 'O', 'R'] },
+  { name: '주주야야휴휴', seq: ['D', 'D', 'N', 'N', 'R', 'R'] },
+  { name: '주야비휴', seq: ['D', 'N', 'O', 'R'] },
+  { name: '주야비', seq: ['D', 'N', 'O'] },
+];
+
+// 법정 공휴일(대체공휴일 포함) — 폰 캘린더를 못 읽을 때의 예비.
+// 2026-10-04 사용자 폰의 삼성 「공휴일」 + 구글 「대한민국의 휴일」과 대조해 맞춤(노동절·제헌절 공휴일 포함).
+// 빠진 날은 달력에서 날짜를 눌러 「휴일 직접 표시」로 추가.
+const HOLIDAYS = {
+  '2025-01-01': '새해첫날', '2025-01-27': '임시공휴일', '2025-01-28': '설날 연휴', '2025-01-29': '설날', '2025-01-30': '설날 연휴',
+  '2025-03-01': '삼일절', '2025-03-03': '대체공휴일', '2025-05-05': '어린이날', '2025-05-06': '대체공휴일',
+  '2025-06-03': '대통령선거', '2025-06-06': '현충일', '2025-08-15': '광복절', '2025-10-03': '개천절',
+  '2025-10-05': '추석 연휴', '2025-10-06': '추석', '2025-10-07': '추석 연휴', '2025-10-08': '대체공휴일',
+  '2025-10-09': '한글날', '2025-12-25': '크리스마스',
+  '2026-01-01': '새해첫날', '2026-02-16': '설날 연휴', '2026-02-17': '설날', '2026-02-18': '설날 연휴',
+  '2026-03-01': '삼일절', '2026-03-02': '대체공휴일', '2026-05-01': '노동절', '2026-05-05': '어린이날',
+  '2026-05-24': '부처님오신날', '2026-05-25': '대체공휴일', '2026-06-03': '지방선거', '2026-06-06': '현충일',
+  '2026-07-17': '제헌절', '2026-08-15': '광복절', '2026-08-17': '대체공휴일', '2026-09-24': '추석 연휴',
+  '2026-09-25': '추석', '2026-09-26': '추석 연휴', '2026-10-03': '개천절', '2026-10-05': '대체공휴일',
+  '2026-10-09': '한글날', '2026-12-25': '크리스마스',
+  '2027-01-01': '새해첫날', '2027-02-06': '설날 연휴', '2027-02-07': '설날', '2027-02-08': '설날 연휴',
+  '2027-02-09': '대체공휴일', '2027-03-01': '삼일절', '2027-05-01': '노동절', '2027-05-03': '대체공휴일',
+  '2027-05-05': '어린이날', '2027-05-13': '부처님오신날', '2027-06-06': '현충일', '2027-07-17': '제헌절',
+  '2027-07-19': '대체공휴일', '2027-08-15': '광복절', '2027-08-16': '대체공휴일', '2027-09-14': '추석 연휴',
+  '2027-09-15': '추석', '2027-09-16': '추석 연휴', '2027-10-03': '개천절', '2027-10-04': '대체공휴일',
+  '2027-10-09': '한글날', '2027-10-11': '대체공휴일', '2027-12-25': '크리스마스', '2027-12-27': '대체공휴일',
+  '2028-01-01': '새해첫날', '2028-01-26': '설날 연휴', '2028-01-27': '설날', '2028-01-28': '설날 연휴',
+  '2028-03-01': '삼일절', '2028-05-01': '노동절', '2028-05-02': '부처님오신날', '2028-05-05': '어린이날',
+  '2028-06-06': '현충일', '2028-07-17': '제헌절', '2028-08-15': '광복절', '2028-10-02': '추석 연휴',
+  '2028-10-03': '추석·개천절', '2028-10-04': '추석 연휴', '2028-10-05': '대체공휴일', '2028-10-09': '한글날',
+  '2028-12-25': '크리스마스',
+  '2029-01-01': '새해첫날', '2029-02-12': '설날 연휴', '2029-02-13': '설날', '2029-02-14': '설날 연휴',
+  '2029-03-01': '삼일절', '2029-05-01': '노동절', '2029-05-05': '어린이날', '2029-05-07': '대체공휴일',
+  '2029-05-20': '부처님오신날', '2029-05-21': '대체공휴일', '2029-06-06': '현충일', '2029-07-17': '제헌절',
+  '2029-08-15': '광복절', '2029-09-21': '추석 연휴', '2029-09-22': '추석', '2029-09-23': '추석 연휴',
+  '2029-09-24': '대체공휴일', '2029-10-03': '개천절', '2029-10-09': '한글날', '2029-12-25': '크리스마스',
+};
+
+// ---------- 날짜 ----------
+const pad = n => String(n).padStart(2, '0');
+const keyOf = (y, m, d) => `${y}-${pad(m + 1)}-${pad(d)}`;            // m: 0부터
+const parseKey = k => { const [y, m, d] = k.split('-').map(Number); return { y, m: m - 1, d }; };
+const dayNum = k => { const { y, m, d } = parseKey(k); return Math.round(Date.UTC(y, m, d) / 86400000); };
+const keyFromNum = n => { const t = new Date(n * 86400000); return keyOf(t.getUTCFullYear(), t.getUTCMonth(), t.getUTCDate()); };
+const todayKey = () => { const t = new Date(); return keyOf(t.getFullYear(), t.getMonth(), t.getDate()); };
+const dowOf = k => new Date(dayNum(k) * 86400000).getUTCDay();
+const DOW = '일월화수목금토';
+const md = k => { const { m, d } = parseKey(k); return `${m + 1}/${d}`; };
+const ymKey = (y, m) => `${y}-${pad(m + 1)}`;
+
+// ---------- 유틸 ----------
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const uid = () => Math.random().toString(36).slice(2, 9);
+const clone = o => JSON.parse(JSON.stringify(o));
+const safeColor = c => /^#[0-9a-fA-F]{6}$/.test(c) ? c : '#888888';
+function textOn(hex) {
+  const n = parseInt(safeColor(hex).slice(1), 16);
+  const l = (0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255;
+  return l > 0.6 ? '#222' : '#fff';
+}
+let toastT;
+function toast(msg) {
+  const t = $('#toast'); t.textContent = msg; t.classList.add('on');
+  clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('on'), 2200);
+}
+
+// ---------- 상태 ----------
+function freshState() { return { v: 1, types: clone(DEFAULT_TYPES), people: [], memos: {}, memoColors: {}, monthMemos: {}, holidays: {}, calHol: {} }; }
+
+// 날짜 메모 색 — 칸에는 옅은 바탕 + 왼쪽 색 띠(글씨는 기본색이라 다크 모드에서도 읽힘)
+const MEMO_COLORS = [
+  { id: '', name: '기본' },
+  { id: 'red', name: '빨강', hex: '#E5484D' }, { id: 'orange', name: '주황', hex: '#F76B15' },
+  { id: 'yellow', name: '노랑', hex: '#FFC53D' }, { id: 'green', name: '초록', hex: '#30A46C' },
+  { id: 'sky', name: '하늘', hex: '#0090FF' }, { id: 'blue', name: '파랑', hex: '#3E63DD' },
+  { id: 'purple', name: '보라', hex: '#8E4EC6' }, { id: 'pink', name: '분홍', hex: '#D6409F' },
+  { id: 'gray', name: '회색', hex: '#8B8D98' },
+];
+const memoColor = id => (id && MEMO_COLORS.find(c => c.id === id)) || null;
+function memoStyle(id, field = false) {
+  const c = memoColor(id);
+  if (!c) return '';
+  return field ? ` style="background:${c.hex}33;border-color:${c.hex}"` : ` style="background:${c.hex}4D;box-shadow:inset 3px 0 ${c.hex}"`;
+}
+// 안드로이드 앱 안에서 돌 때 — 네이티브 쪽에도 같이 저장(웹뷰 저장소가 늦게 써지는 것 대비)
+const NATIVE = window.AndroidApp || null;
+function load() {
+  const tries = [];
+  if (NATIVE) try { tries.push(NATIVE.restore()); } catch (e) {}
+  try { tries.push(localStorage.getItem(KEY)); } catch (e) {}
+  for (const raw of tries) {
+    try {
+      const s = JSON.parse(raw);
+      if (s && Array.isArray(s.people) && Array.isArray(s.types)) return Object.assign(freshState(), s);
+    } catch (e) {}
+  }
+  return null;
+}
+function save() {
+  const json = JSON.stringify(S);
+  let ok = false;
+  if (NATIVE) try { NATIVE.persist(json); ok = true; } catch (e) {}
+  try { localStorage.setItem(KEY, json); ok = true; } catch (e) {}
+  if (!ok) toast('저장 실패 — 저장 공간을 확인하세요');
+}
+
+let S = load();
+const now = new Date();
+let view = { y: now.getFullYear(), m: now.getMonth() };
+let tab = 'cal';
+
+const me = () => S.people.find(p => p.me);
+const others = () => S.people.filter(p => !p.me);
+const typeOf = id => S.types.find(t => t.id === id);
+// 빨간 날 = 직접 표시 > 폰 캘린더 > 내장 목록. 기념일(쉬지 않는 날)은 회색 글씨만.
+const holidayOf = k => S.holidays[k] || (S.calHol[k] && S.calHol[k].red.join('·')) || HOLIDAYS[k] || '';
+const anniOf = k => (!holidayOf(k) && S.calHol[k] && S.calHol[k].other.join('·')) || '';
+// 날짜 창에 보일 «전체 이름» — 칸에선 잘려도 여기선 다 보인다(빨간 날 + 기념일 모두)
+function dayLabels(k) {
+  const c = S.calHol[k];
+  const red = S.holidays[k] ? [S.holidays[k]] : c && c.red.length ? c.red : HOLIDAYS[k] ? [HOLIDAYS[k]] : [];
+  return { red, gray: (c && c.other) || [] };
+}
+
+function patternShift(p, k) {
+  if (!p || !p.pattern || !p.pattern.length || !p.start) return '';
+  const L = p.pattern.length;
+  return p.pattern[(((dayNum(k) - dayNum(p.start)) % L) + L) % L];
+}
+function shiftOf(p, k) {
+  if (!p) return '';
+  if (p.overrides && Object.prototype.hasOwnProperty.call(p.overrides, k)) return p.overrides[k];
+  return patternShift(p, k);
+}
+
+function badge(id, size = '') {
+  const t = typeOf(id);
+  if (!t) return '';
+  const c = safeColor(t.color);
+  if (t.kind === 'fill') return `<span class="b fill ${size}" style="background:${c};color:${textOn(c)}">${esc(t.label)}</span>`;
+  return `<span class="b text ${size}" style="color:${c}">${esc(t.label)}</span>`;
+}
+
+// ---------- 화면: 내 달력 ----------
+function monthFrame() {
+  const { y, m } = view;
+  const first = new Date(y, m, 1).getDay();
+  const days = new Date(y, m + 1, 0).getDate();
+  return { y, m, startNum: dayNum(keyOf(y, m, 1)) - first, weeks: Math.ceil((first + days) / 7) };
+}
+
+function renderCal() {
+  const { m, startNum, weeks } = monthFrame();
+  const p = me(), tk = todayKey();
+  let html = '';
+  for (let i = 0; i < weeks * 7; i++) {
+    const k = keyFromNum(startNum + i), { d, m: mm } = parseKey(k), dow = i % 7, hol = holidayOf(k), anni = anniOf(k);
+    const sh = shiftOf(p, k), memo = S.memos[k];
+    const ov = p && p.overrides && Object.prototype.hasOwnProperty.call(p.overrides, k);
+    const dc = hol ? 'holi' : dow === 0 ? 'sun' : dow === 6 ? 'sat' : '';
+    html += `<div class="cell${mm !== m ? ' out' : ''}${k === tk ? ' today' : ''}" data-k="${k}">
+      <div class="dn ${dc}"><span>${d}</span>${hol ? `<span class="hol">${esc(hol)}</span>` : anni ? `<span class="hol anni">${esc(anni)}</span>` : ''}</div>
+      <div class="sh">${badge(sh)}${ov ? '<i class="ov"></i>' : ''}</div>
+      ${memo ? `<div class="memo"${memoStyle(S.memoColors[k])}>${esc(memo)}</div>` : ''}</div>`;
+  }
+  const g = $('#grid');
+  g.innerHTML = html;
+  g.style.gridTemplateRows = `repeat(${weeks}, minmax(0, 1fr))`;
+  g.classList.toggle('w6', weeks === 6);
+  renderStats();
+  $('#monthMemo').value = S.monthMemos[ymKey(view.y, view.m)] || '';
+}
+
+function renderStats() {
+  const p = me();
+  if (!p) { $('#stats').innerHTML = ''; return; }
+  const { y, m } = view, days = new Date(y, m + 1, 0).getDate(), cnt = {};
+  for (let d = 1; d <= days; d++) { const s = shiftOf(p, keyOf(y, m, d)); if (s) cnt[s] = (cnt[s] || 0) + 1; }
+  $('#stats').innerHTML = `<span class="t">${m + 1}월</span>` +
+    S.types.filter(t => cnt[t.id]).map(t => `<span class="st">${badge(t.id, 'sm')}<b>${cnt[t.id]}</b></span>`).join('');
+}
+
+// ---------- 화면: 근무자 ----------
+function renderTeam() {
+  const { m, startNum, weeks } = monthFrame();
+  const list = [me(), ...others()].filter(Boolean), tk = todayKey();
+  let html = '';
+  for (let w = 0; w < weeks; w++) {
+    html += '<div class="tw"><div class="trow head"><div class="tname"></div>';
+    for (let i = 0; i < 7; i++) {
+      const k = keyFromNum(startNum + w * 7 + i), { d, m: mm } = parseKey(k), hol = holidayOf(k), anni = anniOf(k);
+      const c = hol || i === 0 ? 'sun' : i === 6 ? 'sat' : '';
+      html += `<div class="th ${c}${mm !== m ? ' out' : ''}${k === tk ? ' today' : ''}" data-k="${k}">${d}${hol ? `<small>${esc(hol)}</small>` : anni ? `<small class="anni">${esc(anni)}</small>` : ''}</div>`;
+    }
+    html += '</div>';
+    for (const p of list) {
+      html += `<div class="trow${p.me ? ' mine' : ''}"><div class="tname" data-pid="${p.id}">${esc(p.name)}</div>`;
+      for (let i = 0; i < 7; i++) {
+        const k = keyFromNum(startNum + w * 7 + i), { m: mm } = parseKey(k);
+        html += `<div class="tc${mm !== m ? ' out' : ''}${k === tk ? ' today' : ''}" data-pid="${p.id}" data-k="${k}">${badge(shiftOf(p, k), 'sm')}</div>`;
+      }
+      html += '</div>';
+    }
+    html += '</div>';
+  }
+  if (!others().length) html += '<div class="empty">아래 「+ 근무자 추가」로 다른 사람 근무표를 넣거나,<br>설정 → 「공유 코드로 근무자 추가」로 받은 코드를 붙여넣으세요.</div>';
+  $('#team').innerHTML = html;
+}
+
+// ---------- 화면: 설정 ----------
+function renderSettings() {
+  const p = me();
+  $('#settings').innerHTML = `
+  <div class="card"><div class="card-h">내 근무 패턴</div>
+    <div class="rowb">${p ? p.pattern.map(id => badge(id, 'sm')).join('') : ''}</div>
+    <div class="btns"><button class="btn" data-act="editMe">패턴 · 시작일 수정</button></div></div>
+  ${calCardHtml()}
+  <div class="card"><div class="card-h">근무 종류</div>
+    <p class="hint">글자(1~2자) · 이름 · 색 · 모양(원 / 글자만)을 바꿀 수 있어요.</p>
+    ${S.types.map(t => `<div class="trow2" data-tid="${t.id}">${badge(t.id, 'sm')}
+      <input class="f-label" value="${esc(t.label)}" maxlength="2" aria-label="글자">
+      <input class="f-name" value="${esc(t.name)}" maxlength="10" aria-label="이름">
+      <input class="f-color" type="color" value="${safeColor(t.color)}" aria-label="색">
+      <select class="f-kind" aria-label="모양"><option value="fill"${t.kind === 'fill' ? ' selected' : ''}>원</option><option value="text"${t.kind === 'text' ? ' selected' : ''}>글자</option></select>
+      <button class="danger" data-act="delType" aria-label="삭제">✕</button></div>`).join('')}
+    <div class="btns"><button class="btn" data-act="addType">+ 종류 추가</button></div></div>
+  <div class="card"><div class="card-h">근무표 공유</div>
+    <p class="hint">「내 근무표 보내기」로 만든 코드를 카톡 등으로 보내면, 받은 사람이 「공유 코드로 근무자 추가」에 붙여넣어 내 근무를 볼 수 있어요.</p>
+    <div class="btns"><button class="btn" data-act="shareMe">내 근무표 보내기</button><button class="btn" data-act="importCode">공유 코드로 근무자 추가</button></div></div>
+  <div class="card"><div class="card-h">백업</div>
+    <p class="hint">${NATIVE ? '데이터는 이 휴대폰 안에만 저장돼요. 폰을 바꾸기 전에 백업 파일을 저장해 두세요.'
+      : '데이터는 이 휴대폰의 <b>크롬 안</b>에만 저장돼요. 크롬 데이터를 지우거나 폰을 바꾸면 사라지니 가끔 백업 파일을 저장해 두세요.'}
+      ${S.lastBackupAt ? `<br>마지막 백업: ${Math.floor((Date.now() - S.lastBackupAt) / 86400000)}일 전` : '<br>아직 백업한 적이 없어요.'}</p>
+    <div class="btns"><button class="btn" data-act="export">백업 파일 저장</button><button class="btn" data-act="import">백업 불러오기</button></div></div>
+  <div class="card"><div class="btns"><button class="btn danger" data-act="reset">전체 초기화</button></div></div>`;
+}
+
+function calCardHtml() {
+  if (!NATIVE) {  // 웹앱 — 폰 캘린더 대신 구글 공휴일 표(holidays.json · 서버가 하루 한 번 갱신)
+    const at = S.webHolAt ? new Date(S.webHolAt) : null;
+    return `<div class="card"><div class="card-h">공휴일 자동 갱신</div>
+      <p class="hint">정부 지정 공휴일·대체공휴일·임시공휴일을 인터넷에서 자동으로 받아 와요(구글 「대한민국의 휴일」 기준). 쉬지 않는 기념일은 회색 글씨로 보여요.
+      ${at ? `<br>마지막으로 받은 때: ${at.getMonth() + 1}/${at.getDate()} ${pad(at.getHours())}:${pad(at.getMinutes())} · ${Object.keys(S.calHol).length}일` : '<br>아직 받지 못했어요 — 인터넷에 연결되면 받아 와요.'}</p>
+      <div class="btns"><button class="btn" data-act="webHol">지금 다시 받기</button></div></div>`;
+  }
+  const head = `<div class="card"><div class="card-h">폰 캘린더 공휴일</div>
+    <p class="hint">삼성·구글 캘린더에 있는 공휴일 캘린더를 읽어 와요(읽기만 하고 바꾸지 않아요). 임시공휴일도 폰 캘린더에 뜨면 같이 반영돼요. 쉬지 않는 기념일은 회색 글씨로 보여요.</p>`;
+  if (!NATIVE.calendarGranted()) return head + `<div class="btns"><button class="btn" data-act="calConnect">폰 캘린더 연결</button></div></div>`;
+  const cals = calList(), sel = new Set((S.calSel || []).map(String)), stat = S.calStat || {};
+  const rows = cals.map(c => `<label class="calrow"><input type="checkbox" class="f-cal" value="${esc(c.id)}"${sel.has(String(c.id)) ? ' checked' : ''}>
+      <span class="nm">${esc(c.name || '(이름 없음)')}<small>${{ red: '빨간 날', mixed: '빨간 날 + 기념일', gray: '회색 글씨(쉬지 않는 날)' }[calRole(c)]}</small></span>${stat[c.id] ? `<span class="sub">${stat[c.id]}일</span>` : ''}</label>`).join('');
+  const at = S.calAt ? new Date(S.calAt) : null, y = new Date().getFullYear();
+  return head + (rows || '<p class="hint">폰에 캘린더가 없어요.</p>') +
+    `<p class="hint" style="margin-top:8px">가져오는 범위: ${y - 1}년 ~ ${y + 3}년 (해가 바뀌면 자동으로 따라가요)${at ? `<br>마지막으로 가져온 때: ${at.getMonth() + 1}/${at.getDate()} ${pad(at.getHours())}:${pad(at.getMinutes())}` : ''}</p>
+    <div class="btns"><button class="btn" data-act="calSync">지금 다시 가져오기</button></div></div>`;
+}
+
+function render() {
+  $('#title').textContent = `${view.y}. ${pad(view.m + 1)}`;
+  $('#top').classList.toggle('noNav', tab === 'set');
+  if (tab === 'cal') renderCal();
+  else if (tab === 'team') renderTeam();
+  else renderSettings();
+}
+
+// ---------- 시트 ----------
+let sheetClick = null, sheetLocked = false, sheetTimer = 0;
+function openSheet(html, onClick, locked = false) {
+  const w = $('#sheetWrap');
+  clearTimeout(sheetTimer);
+  $('#sheet').innerHTML = html;
+  sheetClick = onClick; sheetLocked = locked;
+  if (w.hidden) { w.hidden = false; void w.offsetWidth; }
+  w.classList.add('open');
+}
+function closeSheet() {
+  const w = $('#sheetWrap');
+  w.classList.remove('open'); sheetClick = null; sheetLocked = false;
+  clearTimeout(sheetTimer);
+  sheetTimer = setTimeout(() => { w.hidden = true; $('#sheet').innerHTML = ''; }, 230);
+  render();
+}
+$('#sheetWrap').addEventListener('click', e => { if (e.target.id === 'sheetWrap' && !sheetLocked) closeSheet(); });
+$('#sheet').addEventListener('click', e => { if (sheetClick) sheetClick(e); });
+
+// 날짜 시트 — 근무 바꾸기 · 메모 · 휴일 표시
+function openDay(k, pid) {
+  const p = pid ? S.people.find(x => x.id === pid) : me();
+  if (!p) return;
+  const { m, d } = parseKey(k), lb = dayLabels(k);
+  let mc = S.memos[k] ? (S.memoColors[k] || '') : (S.lastMemoColor || '');
+  const base = patternShift(p, k), cur = shiftOf(p, k);
+  const ov = p.overrides && Object.prototype.hasOwnProperty.call(p.overrides, k);
+  const bt = typeOf(base);
+  openSheet(`
+    <div class="sh-title">${m + 1}월 ${d}일 (${DOW[dowOf(k)]})${p.me ? '' : `<span class="who">${esc(p.name)}</span>`}</div>
+    ${lb.red.length + lb.gray.length ? `<div class="tags">${lb.red.map(t => `<span class="tag">${esc(t)}</span>`).join('')}${lb.gray.map(t => `<span class="tag gray">${esc(t)}</span>`).join('')}</div>` : ''}
+    <div class="lbl">근무 ${ov ? '<span class="badge-ov">바꾼 날</span>' : ''}</div>
+    <div class="types">
+      ${S.types.map(t => `<button class="tbtn${cur === t.id ? ' sel' : ''}" data-t="${t.id}">${badge(t.id, 'sm')}<span>${esc(t.name)}</span></button>`).join('')}
+      <button class="tbtn${cur === '' ? ' sel' : ''}" data-t=""><span class="none">–</span><span>없음</span></button>
+    </div>
+    ${ov ? `<button class="link" data-act="resetOv">↺ 패턴대로 되돌리기 (${bt ? esc(bt.name) : '없음'})</button>` : ''}
+    ${p.me ? `
+    <div class="lbl">메모</div>
+    <textarea id="dayMemo" placeholder="예: 회식 7시, 병원 예약"${memoStyle(mc, true)}>${esc(S.memos[k] || '')}</textarea>
+    <div class="mcolors">${MEMO_COLORS.map(c => `<button class="mc${c.id === mc ? ' on' : ''}" data-mc="${c.id}" title="${c.name}" aria-label="${c.name}" style="${c.id ? `background:${c.hex}` : ''}">${c.id ? '' : '기본'}</button>`).join('')}</div>
+    <details style="margin-top:12px"><summary class="sub">휴일 직접 표시</summary>
+      <input type="text" id="dayHol" style="margin-top:8px" placeholder="${HOLIDAYS[k] ? esc(HOLIDAYS[k]) + ' (기본)' : '예: 창립기념일'}" value="${esc(S.holidays[k] || '')}" maxlength="10">
+    </details>` : ''}
+    <div class="actions"><button class="primary" data-act="done">완료</button></div>`,
+  e => {
+    const tb = e.target.closest('[data-t]'), act = e.target.closest('[data-act]')?.dataset.act;
+    const mb = e.target.closest('[data-mc]');
+    if (mb) {  // 메모 색 — 창은 그대로 두고 그 자리에서만 바꾼다
+      mc = mb.dataset.mc;
+      document.querySelectorAll('.mc').forEach(x => x.classList.toggle('on', x === mb));
+      const ta = $('#dayMemo'), st = memoColor(mc);
+      ta.style.background = st ? st.hex + '33' : ''; ta.style.borderColor = st ? st.hex : '';
+      return;
+    }
+    if (tb) {
+      const t = tb.dataset.t;
+      p.overrides = p.overrides || {};
+      if (t === base) delete p.overrides[k]; else p.overrides[k] = t;
+      commitDay(k); save(); render(); openDay(k, pid);
+    } else if (act === 'resetOv') {
+      delete p.overrides[k]; commitDay(k); save(); render(); openDay(k, pid);
+    } else if (act === 'done') { commitDay(k); save(); closeSheet(); }
+  });
+  function commitDay(key) {
+    const mt = $('#dayMemo'), ht = $('#dayHol');
+    if (mt) {
+      const v = mt.value.trim();
+      if (v) S.memos[key] = v; else delete S.memos[key];
+      if (v && mc) S.memoColors[key] = mc; else delete S.memoColors[key];
+      if (v) S.lastMemoColor = mc;  // 다음 새 메모는 이 색으로 시작
+    }
+    if (ht) { const v = ht.value.trim(); if (v) S.holidays[key] = v; else delete S.holidays[key]; }
+  }
+}
+
+// 패턴 편집 — 나 / 근무자 추가·수정
+let PD = null;
+function openPattern(pid, first = false) {
+  const p = pid ? S.people.find(x => x.id === pid) : null, m0 = me();
+  PD = {
+    pid, first, isMe: p ? !!p.me : !m0,
+    name: p ? p.name : (m0 ? '' : '나'),
+    seq: p ? [...p.pattern] : m0 ? [...m0.pattern] : [...PRESETS[0].seq],
+    start: p ? p.start : m0 ? m0.start : todayKey(),
+  };
+  renderPattern();
+}
+function renderPattern() {
+  const tk = todayKey(), L = PD.seq.length, m0 = me();
+  const tIdx = L ? (((dayNum(tk) - dayNum(PD.start)) % L) + L) % L : -1;
+  const draft = { pattern: PD.seq, start: PD.start };
+  const t0 = dayNum(tk);
+  let pv = '';
+  for (let i = 0; i < 14; i++) {
+    const k = keyFromNum(t0 + i), dw = dowOf(k), c = holidayOf(k) || dw === 0 ? 'sun' : dw === 6 ? 'sat' : '';
+    pv += `<div class="c${i === 0 ? ' today' : ''}"><span class="${c}">${parseKey(k).d}</span>${badge(patternShift(draft, k), 'sm') || '<span class="b sm text"></span>'}${!PD.isMe && m0 ? badge(shiftOf(m0, k), 'sm') || '<span class="b sm text"></span>' : ''}</div>`;
+  }
+  const title = PD.first ? '근무 패턴 설정' : PD.isMe ? '내 근무 패턴' : PD.pid ? '근무자 수정' : '근무자 추가';
+  openSheet(`
+    <div class="sh-title">${title}</div>
+    ${PD.first ? '<p class="hint" style="margin-top:8px">반복되는 근무 순서를 한 번만 넣으면 달력에 계속 채워져요. 나중에 설정에서 바꿀 수 있어요.</p>' : ''}
+    <div class="lbl">이름</div>
+    <input type="text" id="pName" value="${esc(PD.name)}" placeholder="예: B조 홍길동" maxlength="20">
+    <div class="lbl">자주 쓰는 패턴</div>
+    <div class="chips">${PRESETS.map((x, i) => `<button class="chip" data-preset="${i}">${x.name}</button>`).join('')}</div>
+    <div class="lbl">근무 순서 <span class="sub">${L}일 주기 · 누르면 빠짐</span></div>
+    <div class="seq">${PD.seq.map((id, i) => `<button class="it" data-del="${i}">${badge(id, 'sm')}<span>${i + 1}</span></button>`).join('') || '<span class="sub" style="padding:0 6px">아래 근무를 눌러 순서대로 추가</span>'}</div>
+    <div class="types" style="margin-top:8px">${S.types.map(t => `<button class="tbtn" data-add="${t.id}">${badge(t.id, 'sm')}<span>+ ${esc(t.name)}</span></button>`).join('')}</div>
+    ${L ? `<div class="lbl">오늘(${md(tk)} ${DOW[dowOf(tk)]})은 몇 번째 날?</div>
+    <div class="seq">${PD.seq.map((id, i) => `<button class="it${i === tIdx ? ' on' : ''}" data-today="${i}">${badge(id, 'sm')}<span>${i + 1}</span></button>`).join('')}</div>` : ''}
+    ${!PD.isMe && m0 ? `<div class="lbl">내 근무 기준으로 밀기</div>
+    <div class="chips"><button class="chip" data-off="-1">◀ 하루 앞당기기</button><button class="chip" data-off="1">하루 미루기 ▶</button></div>` : ''}
+    <div class="lbl">미리보기 <span class="sub">오늘부터 2주${!PD.isMe && m0 ? ' · 아래 줄 = 나' : ''}</span></div>
+    <div class="pv">${pv}</div>
+    <div class="actions">
+      ${PD.first ? '' : '<button class="ghost" data-act="cancel">취소</button>'}
+      ${PD.pid && !PD.isMe ? '<button class="ghost danger" data-act="del">삭제</button>' : ''}
+      <button class="primary" data-act="save">저장</button>
+    </div>`, onPatternClick, PD.first);
+  $('#pName').addEventListener('input', e => { PD.name = e.target.value; });
+}
+function onPatternClick(e) {
+  const b = e.target.closest('button'); if (!b) return;
+  const ds = b.dataset;
+  if (ds.preset !== undefined) PD.seq = [...PRESETS[+ds.preset].seq];
+  else if (ds.add !== undefined) PD.seq.push(ds.add);
+  else if (ds.del !== undefined) PD.seq.splice(+ds.del, 1);
+  else if (ds.today !== undefined) PD.start = keyFromNum(dayNum(todayKey()) - +ds.today);
+  else if (ds.off !== undefined) PD.start = keyFromNum(dayNum(PD.start) + +ds.off);
+  else if (ds.act === 'cancel') return closeSheet();
+  else if (ds.act === 'del') {
+    if (!confirm(`「${PD.name}」 근무자를 지울까요?`)) return;
+    S.people = S.people.filter(x => x.id !== PD.pid); save(); return closeSheet();
+  } else if (ds.act === 'save') return savePattern();
+  else return;
+  renderPattern();
+}
+function savePattern() {
+  const name = PD.name.trim() || (PD.isMe ? '나' : '');
+  if (!name) return toast('이름을 넣어 주세요');
+  if (!PD.seq.length) return toast('근무 순서를 하나 이상 넣어 주세요');
+  const p = PD.pid ? S.people.find(x => x.id === PD.pid) : null;
+  if (p) Object.assign(p, { name, pattern: [...PD.seq], start: PD.start });
+  else S.people.push({ id: uid(), me: PD.isMe, name, pattern: [...PD.seq], start: PD.start, overrides: {} });
+  const wasFirst = PD.first;
+  save(); closeSheet(); toast('저장했어요');
+  if (wasFirst) setTimeout(maybeAskCalendar, 400);
+}
+
+// ---------- 공유 · 백업 ----------
+const b64e = s => btoa(unescape(encodeURIComponent(s))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+const b64d = s => decodeURIComponent(escape(atob(s.replace(/-/g, '+').replace(/_/g, '/'))));
+
+function makeCode(p) {
+  const from = dayNum(todayKey()) - 60, o = {};
+  for (const [k, v] of Object.entries(p.overrides || {})) if (dayNum(k) >= from) o[k] = v;
+  const used = new Set([...p.pattern, ...Object.values(o)]);
+  const t = S.types.filter(x => used.has(x.id));
+  return 'SC1.' + b64e(JSON.stringify({ n: p.name, q: p.pattern, s: p.start, o, t }));
+}
+function readCode(text) {
+  const m = String(text).match(/SC1\.[A-Za-z0-9_-]+/);
+  if (!m) throw new Error('코드를 찾지 못했어요');
+  const d = JSON.parse(b64d(m[0].slice(4)));
+  if (!d || !Array.isArray(d.q) || !d.s) throw new Error('코드가 깨졌어요');
+  return d;
+}
+function shareMe() {
+  const p = me(), code = makeCode(p);
+  const text = `[근무달력] ${p.name} 근무표\n근무달력 → 설정 → 「공유 코드로 근무자 추가」에 붙여넣으세요.\n${code}`;
+  openSheet(`
+    <div class="sh-title">내 근무표 보내기</div>
+    <p class="hint" style="margin-top:8px">패턴과 최근 바꾼 날짜가 들어 있어요. 근무를 또 바꾸면 다시 보내 주면 돼요.</p>
+    <div class="codebox">${esc(code)}</div>
+    <div class="actions"><button class="ghost" data-act="copy">복사</button>${NATIVE || navigator.share ? '<button class="primary" data-act="share">보내기</button>' : '<button class="primary" data-act="close">닫기</button>'}</div>`,
+  async e => {
+    const act = e.target.closest('[data-act]')?.dataset.act;
+    if (act === 'copy') {
+      if (NATIVE) { NATIVE.copy(text); toast('복사했어요'); return; }
+      try { await navigator.clipboard.writeText(text); toast('복사했어요'); } catch { toast('길게 눌러 직접 복사하세요'); }
+    }
+    else if (act === 'share') {
+      if (NATIVE) return NATIVE.share(text);
+      try { await navigator.share({ title: '근무표 공유', text }); } catch {}
+    }
+    else if (act === 'close') closeSheet();
+  });
+}
+function importCode() {
+  openSheet(`
+    <div class="sh-title">공유 코드로 근무자 추가</div>
+    <p class="hint" style="margin-top:8px">받은 메시지를 통째로 붙여넣어도 돼요. 같은 이름이 있으면 새 내용으로 바뀝니다.</p>
+    <textarea id="codeIn" placeholder="SC1.으로 시작하는 코드"></textarea>
+    <div class="actions"><button class="ghost" data-act="cancel">취소</button><button class="primary" data-act="add">추가</button></div>`,
+  e => {
+    const act = e.target.closest('[data-act]')?.dataset.act;
+    if (act === 'cancel') return closeSheet();
+    if (act !== 'add') return;
+    let d;
+    try { d = readCode($('#codeIn').value); } catch (err) { return toast(err.message); }
+    for (const t of d.t || []) if (!typeOf(t.id)) S.types.push({ id: t.id, label: t.label, name: t.name, color: safeColor(t.color), kind: t.kind === 'text' ? 'text' : 'fill' });
+    const name = String(d.n || '이름 없음').slice(0, 20);
+    const ex = others().find(x => x.name === name);
+    const data = { name, pattern: d.q.map(String), start: d.s, overrides: d.o || {} };
+    if (ex) Object.assign(ex, data); else S.people.push({ id: uid(), me: false, ...data });
+    save(); closeSheet(); toast(`${name} 근무표를 ${ex ? '갱신' : '추가'}했어요`);
+  });
+}
+function exportBackup() {
+  const t = new Date(), name = `근무달력-백업-${t.getFullYear()}${pad(t.getMonth() + 1)}${pad(t.getDate())}.json`;
+  S.lastBackupAt = Date.now(); save();
+  const json = JSON.stringify(S, null, 1);
+  if (NATIVE) return NATIVE.saveFile(name, json);
+  const blob = new Blob([json], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+}
+async function importBackup(file) {
+  try {
+    const d = JSON.parse(await file.text());
+    if (!d || !Array.isArray(d.people) || !Array.isArray(d.types)) throw 0;
+    if (!confirm('지금 데이터를 백업 파일 내용으로 바꿀까요?')) return;
+    S = Object.assign(freshState(), d); save(); render(); toast('불러왔어요');
+  } catch { toast('백업 파일이 아니에요'); }
+}
+
+// ---------- 폰 캘린더 공휴일 ----------
+// 캘린더마다 역할이 다르다(2026-10-04 사용자 폰에서 확인):
+//   red   = 삼성 「공휴일」 — 전부 쉬는 날. 단 설·추석은 «당일»만 있고 연휴 날이 없다.
+//   mixed = 구글 「대한민국의 휴일」 — 연휴·「쉬는 날 X」(=대체공휴일)가 있고, 어버이날 같은 기념일도 섞여 있다.
+//   gray  = 「법정기념일」·「절기와 세시풍속」 등 — 쉬지 않는 날(회색 글씨). 이름에 「임시」가 있어도 빨간 날 아님.
+const calRole = c => {
+  const n = String(c.name || '').trim();
+  if (/^공휴일$|^public holidays?$/i.test(n)) return 'red';
+  if (/휴일|holiday/i.test(n)) return 'mixed';
+  return 'gray';
+};
+// 처음 고를 캘린더 — 공휴일·휴일·기념일 캘린더(절기·세시풍속은 빼 둔다. 설정에서 켤 수 있음)
+const calDefault = c => calRole(c) !== 'gray' || /기념일/.test(c.name || '');
+const MIXED_RED_RE = /연휴|새해첫날|신정|설날|삼일절|노동절|어린이날|부처님오신날|석가탄신일|현충일|제헌절|광복절|추석|개천절|한글날|크리스마스|성탄절|기독탄신일|선거|임시공휴일|대체공휴일/;
+function classify(role, title) {
+  let t = title.trim();
+  if (role === 'gray') return { red: false, t };
+  if (/^쉬는\s*날/.test(t)) return { red: true, t: '대체공휴일' };  // 구글의 「쉬는 날 개천절」 = 대체공휴일
+  if (role === 'red') return { red: true, t };
+  return { red: !/이브|전야|그믐/.test(t) && MIXED_RED_RE.test(t.replace(/\s/g, '')), t };
+}
+
+function calList() {
+  try { return JSON.parse(NATIVE.listCalendars()) || []; } catch (e) { return []; }
+}
+function syncCalendar() {
+  if (!NATIVE || !NATIVE.calendarGranted()) return -1;
+  const cals = calList(), role = {};
+  for (const c of cals) role[String(c.id)] = calRole(c);
+  if (!Array.isArray(S.calSel) || S.calSelV !== 2) { S.calSel = cals.filter(calDefault).map(c => String(c.id)); S.calSelV = 2; }
+  const y = new Date().getFullYear();
+  const from = Date.UTC(y - 1, 0, 1) - 86400000, to = Date.UTC(y + 4, 0, 1);
+  let list = [];
+  if (S.calSel.length) try { list = JSON.parse(NATIVE.readEvents(S.calSel.join(','), String(from), String(to))) || []; } catch (e) {}
+  const rank = { red: 0, mixed: 1, gray: 2 };
+  list.sort((a, b) => rank[role[String(a.c)] || 'gray'] - rank[role[String(b.c)] || 'gray']);  // 삼성 공휴일 이름이 먼저
+  const map = {}, stat = {}, same = (arr, t) => arr.some(x => x.replace(/\s/g, '') === t.replace(/\s/g, ''));
+  for (const e of list) {
+    stat[e.c] = (stat[e.c] || 0) + 1;
+    const day = map[e.d] || (map[e.d] = { red: [], other: [] });
+    const { red, t } = classify(role[String(e.c)] || 'gray', e.t);
+    const arr = red ? day.red : day.other;
+    if (!same(arr, t)) arr.push(t);
+  }
+  S.calHol = map; S.calStat = stat; S.calAt = Date.now();
+  save();
+  return Object.keys(map).length;
+}
+// 처음 한 번만 권한을 묻는다(첫 패턴 설정이 끝난 뒤)
+function maybeAskCalendar() {
+  if (!NATIVE || S.calAsked) return;
+  S.calAsked = true; save();
+  if (NATIVE.calendarGranted()) { syncCalendar(); render(); } else NATIVE.requestCalendar();
+}
+window.onCalendarPermission = ok => {
+  if (!ok) { toast('캘린더 권한이 없어 내장 공휴일만 써요'); render(); return; }
+  const n = syncCalendar(); render();
+  toast(S.calSel.length ? `폰 캘린더에서 ${n}일을 가져왔어요` : '공휴일 캘린더를 못 찾았어요 — 설정에서 골라 주세요');
+};
+window.onAppResume = () => {
+  if (NATIVE && NATIVE.calendarGranted() && Array.isArray(S.calSel)) syncCalendar();
+  if (!$('#sheetWrap').classList.contains('open')) render();
+};
+
+// ---------- 년·월 고르기 ----------
+const WI = 44, YEARS = Array.from({ length: 21 }, (_, i) => 2020 + i);
+function openMonthPicker() {
+  const wheel = (id, items, fmt) => `<div class="wheel" id="${id}"><div class="sp"></div>${items.map((v, i) => `<div class="wi" data-i="${i}">${fmt(v)}</div>`).join('')}<div class="sp"></div></div>`;
+  openSheet(`
+    <div class="sh-title">년 · 월 선택</div>
+    <div class="wheels">${wheel('wY', YEARS, v => v + '년')}${wheel('wM', [...Array(12).keys()], v => pad(v + 1) + '월')}<div class="wsel"></div></div>
+    <div class="actions"><button class="ghost" data-act="thisMonth">이번 달</button><button class="ghost" data-act="cancel">취소</button><button class="primary" data-act="ok">완료</button></div>`,
+  e => {
+    const it = e.target.closest('.wi');
+    if (it) return it.parentElement.scrollTo({ top: +it.dataset.i * WI, behavior: 'smooth' });
+    const act = e.target.closest('[data-act]')?.dataset.act;
+    if (act === 'cancel') closeSheet();
+    else if (act === 'thisMonth') { const t = new Date(); view = { y: t.getFullYear(), m: t.getMonth() }; closeSheet(); }
+    else if (act === 'ok') { view = { y: YEARS[wheelIdx($('#wY'))], m: wheelIdx($('#wM')) }; closeSheet(); }
+  });
+  const yi = Math.max(0, YEARS.indexOf(view.y));
+  for (const [w, i] of [[$('#wY'), yi], [$('#wM'), view.m]]) {
+    w.scrollTop = i * WI; markWheel(w);
+    w.addEventListener('scroll', () => markWheel(w), { passive: true });
+  }
+}
+function wheelIdx(w) { return Math.max(0, Math.min(w.querySelectorAll('.wi').length - 1, Math.round(w.scrollTop / WI))); }
+function markWheel(w) { const i = wheelIdx(w); w.querySelectorAll('.wi').forEach((el, j) => el.classList.toggle('on', j === i)); }
+
+// ---------- 한 화면에 맞추기 ----------
+// 키보드가 올라와 화면이 줄 때(메모 입력 중)는 줄이지 않는다 — 달력이 찌그러지지 않게
+let fitH = 0;
+function fitCal() {
+  const tabsH = $('.tabs').offsetHeight;
+  document.body.style.paddingBottom = tabsH + 'px';
+  const h = window.innerHeight - $('#top').offsetHeight - tabsH;
+  const typing = /^(TEXTAREA|INPUT)$/.test(document.activeElement?.tagName || '');
+  if (typing && h < fitH) return;
+  fitH = h;
+  document.documentElement.style.setProperty('--calH', Math.max(h, 440) + 'px');
+}
+window.addEventListener('resize', fitCal);
+
+// ---------- 이벤트 ----------
+$('#title').onclick = openMonthPicker;
+$('#prev').onclick = () => moveMonth(-1);
+$('#next').onclick = () => moveMonth(1);
+$('#todayBtn').onclick = () => { const t = new Date(); view = { y: t.getFullYear(), m: t.getMonth() }; render(); };
+function moveMonth(n) { const d = new Date(view.y, view.m + n, 1); view = { y: d.getFullYear(), m: d.getMonth() }; render(); }
+
+document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => {
+  tab = b.dataset.tab;
+  document.querySelectorAll('.tabs button').forEach(x => x.classList.toggle('active', x === b));
+  document.querySelectorAll('.tab').forEach(x => x.classList.toggle('active', x.id === 'tab-' + tab));
+  window.scrollTo(0, 0); render();
+});
+
+$('#grid').addEventListener('click', e => { const c = e.target.closest('.cell'); if (c) openDay(c.dataset.k); });
+$('#team').addEventListener('click', e => {
+  const n = e.target.closest('.tname[data-pid]'); if (n) return openPattern(n.dataset.pid);
+  const c = e.target.closest('.tc'); if (c) return openDay(c.dataset.k, c.dataset.pid);
+  const h = e.target.closest('.th'); if (h) openDay(h.dataset.k);  // 날짜 줄을 누르면 내 날짜 창(전체 이름)
+});
+$('#addPerson').onclick = () => openPattern(null);
+$('#importFile').addEventListener('change', e => {
+  const f = e.target.files[0];
+  e.target.value = '';
+  if (f) importBackup(f); else toast('파일을 고르지 않았어요');
+});
+$('#monthMemo').addEventListener('input', e => {
+  const k = ymKey(view.y, view.m), v = e.target.value;
+  if (v.trim()) S.monthMemos[k] = v; else delete S.monthMemos[k];
+  save();
+});
+
+$('#settings').addEventListener('click', e => {
+  const b = e.target.closest('[data-act]'); if (!b) return;
+  const act = b.dataset.act;
+  if (act === 'editMe') openPattern(me().id);
+  else if (act === 'addType') { S.types.push({ id: uid(), label: '?', name: '새 근무', color: '#7C5CFF', kind: 'fill' }); save(); render(); }
+  else if (act === 'delType') {
+    const id = b.closest('[data-tid]').dataset.tid;
+    if (S.people.some(p => p.pattern.includes(id))) return toast('패턴에 들어 있는 종류는 지울 수 없어요');
+    if (!confirm('이 근무 종류를 지울까요?')) return;
+    S.types = S.types.filter(t => t.id !== id); save(); render();
+  }
+  else if (act === 'calConnect') { S.calAsked = true; save(); NATIVE.requestCalendar(); }
+  else if (act === 'webHol') fetchWebHolidays(true);
+  else if (act === 'calSync') { const n = syncCalendar(); render(); toast(`${n}일을 가져왔어요`); }
+  else if (act === 'shareMe') shareMe();
+  else if (act === 'importCode') importCode();
+  else if (act === 'export') exportBackup();
+  else if (act === 'import') $('#importFile').click();
+  else if (act === 'reset') {
+    if (!confirm('모든 근무·메모·근무자를 지울까요? 되돌릴 수 없어요.')) return;
+    S = freshState(); save(); openPattern(null, true); render();
+  }
+});
+$('#settings').addEventListener('change', e => {
+  if (e.target.classList.contains('f-cal')) {
+    S.calSel = [...document.querySelectorAll('.f-cal:checked')].map(x => x.value);
+    syncCalendar(); render(); return;
+  }
+  const row = e.target.closest('[data-tid]'); if (!row) return;
+  const t = typeOf(row.dataset.tid); if (!t) return;
+  const v = e.target.value;
+  if (e.target.classList.contains('f-label')) t.label = v.trim().slice(0, 2) || t.label;
+  else if (e.target.classList.contains('f-name')) t.name = v.trim() || t.name;
+  else if (e.target.classList.contains('f-color')) t.color = safeColor(v);
+  else if (e.target.classList.contains('f-kind')) t.kind = v === 'text' ? 'text' : 'fill';
+  save(); render();
+});
+
+// 좌우로 밀어 달 넘기기
+let tx = null, ty = 0;
+$('#main').addEventListener('touchstart', e => { if (tab === 'set') return; tx = e.touches[0].clientX; ty = e.touches[0].clientY; }, { passive: true });
+$('#main').addEventListener('touchend', e => {
+  if (tx === null) return;
+  const dx = e.changedTouches[0].clientX - tx, dy = e.changedTouches[0].clientY - ty; tx = null;
+  if (Math.abs(dx) > 60 && Math.abs(dy) < 50) moveMonth(dx < 0 ? 1 : -1);
+}, { passive: true });
+
+// 안드로이드 뒤로 가기 — 열린 창이 있으면 닫기만
+window.onAndroidBack = () => {
+  if ($('#sheetWrap').hidden || !$('#sheetWrap').classList.contains('open')) return false;
+  if (!sheetLocked) closeSheet();
+  return true;
+};
+
+// ---------- 웹앱: 공휴일 표 받아 오기 ----------
+// holidays.json = tools/fetch_holidays.py 결과(GitHub Actions 가 하루 한 번 갱신). 앱(NATIVE)은 폰 캘린더를 쓰므로 안 받는다.
+async function fetchWebHolidays(manual = false) {
+  if (NATIVE) return;
+  if (!manual && S.webHolAt && Date.now() - S.webHolAt < 6 * 3600000) return;
+  try {
+    const r = await fetch('holidays.json', { cache: 'no-cache' });
+    if (!r.ok) throw 0;
+    const d = await r.json();
+    if (!d || !d.days || Object.keys(d.days).length < 50) throw 0;
+    S.calHol = d.days; S.webHolAt = Date.now(); save();
+    if (!$('#sheetWrap').classList.contains('open')) render();
+    if (manual) toast(`공휴일 ${Object.keys(d.days).length}일을 받아 왔어요`);
+  } catch (e) { if (manual) toast('공휴일을 받지 못했어요 — 인터넷 연결을 확인하세요'); }
+}
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') fetchWebHolidays(); });
+
+// ---------- 시작 ----------
+if (!S) S = freshState();
+fitCal();
+if (NATIVE && NATIVE.calendarGranted() && Array.isArray(S.calSel)) syncCalendar();
+render();
+if (!me()) openPattern(null, true);
+else maybeAskCalendar();
+if (!NATIVE) {
+  fetchWebHolidays();
+  try { navigator.storage && navigator.storage.persist && navigator.storage.persist(); } catch (e) {}  // 크롬이 저장소를 함부로 비우지 않게
+  // 한 달 넘게 백업이 없으면 한 번 알려 준다
+  if (me() && (!S.lastBackupAt || Date.now() - S.lastBackupAt > 30 * 86400000) && (!S.backupNagAt || Date.now() - S.backupNagAt > 7 * 86400000)) {
+    S.backupNagAt = Date.now(); save();
+    setTimeout(() => toast('한 달 넘게 백업이 없어요 — 설정 → 백업 파일 저장'), 1500);
+  }
+}
+if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(() => {});
+</script>
+</body>
+</html>
