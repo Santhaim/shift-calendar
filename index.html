@@ -305,12 +305,21 @@ const others = () => S.people.filter(p => !p.me);
 const typeOf = id => S.types.find(t => t.id === id);
 // 빨간 날 = 직접 표시 > 폰 캘린더 > 내장 목록. 기념일(쉬지 않는 날)은 회색 글씨만.
 const holidayOf = k => S.holidays[k] || (S.calHol[k] && S.calHol[k].red.join('·')) || HOLIDAYS[k] || '';
-const anniOf = k => (!holidayOf(k) && S.calHol[k] && S.calHol[k].other.join('·')) || '';
+// 웹앱 전용 «더 보기» — extras.json(법정기념일 a · 절기 s · 세시풍속 f), 설정에서 켠 것만
+let EXTRAS = {};
+const EXTRA_KINDS = [['a', '법정기념일', '경찰의날·스승의날 등'], ['s', '절기', '입춘·하지·동지 등 24절기'], ['f', '세시풍속', '정월대보름·단오·칠석·복날 등']];
+function grayOf(k) {
+  const out = [...((S.calHol[k] && S.calHol[k].other) || [])];
+  const ex = EXTRAS[k], on = S.extraShow || {};
+  if (ex) for (const [c] of EXTRA_KINDS) if (on[c]) for (const t of ex[c] || []) out.push(t);
+  return out.filter((t, i) => out.findIndex(x => x.replace(/\s/g, '') === t.replace(/\s/g, '')) === i);  // 「국군의날」·「국군의 날」 겹침 제거
+}
+const anniOf = k => (!holidayOf(k) && grayOf(k).join('·')) || '';
 // 날짜 창에 보일 «전체 이름» — 칸에선 잘려도 여기선 다 보인다(빨간 날 + 기념일 모두)
 function dayLabels(k) {
   const c = S.calHol[k];
   const red = S.holidays[k] ? [S.holidays[k]] : c && c.red.length ? c.red : HOLIDAYS[k] ? [HOLIDAYS[k]] : [];
-  return { red, gray: (c && c.other) || [] };
+  return { red, gray: grayOf(k) };
 }
 
 function patternShift(p, k) {
@@ -432,7 +441,10 @@ function calCardHtml() {
     return `<div class="card"><div class="card-h">공휴일 자동 갱신</div>
       <p class="hint">정부 지정 공휴일·대체공휴일·임시공휴일을 인터넷에서 자동으로 받아 와요(구글 「대한민국의 휴일」 기준). 쉬지 않는 기념일은 회색 글씨로 보여요.
       ${at ? `<br>마지막으로 받은 때: ${at.getMonth() + 1}/${at.getDate()} ${pad(at.getHours())}:${pad(at.getMinutes())} · ${Object.keys(S.calHol).length}일` : '<br>아직 받지 못했어요 — 인터넷에 연결되면 받아 와요.'}</p>
-      <div class="btns"><button class="btn" data-act="webHol">지금 다시 받기</button></div></div>`;
+      <div class="btns"><button class="btn" data-act="webHol">지금 다시 받기</button></div>
+      <div class="lbl" style="margin-top:14px">더 보기 <span class="sub">회색 글씨로 표시 · 2030년까지</span></div>
+      ${EXTRA_KINDS.map(([c, name, ex]) => `<label class="calrow"><input type="checkbox" class="f-extra" value="${c}"${(S.extraShow || {})[c] ? ' checked' : ''}>
+        <span class="nm">${name}<small>${ex}</small></span></label>`).join('')}</div>`;
   }
   const head = `<div class="card"><div class="card-h">폰 캘린더 공휴일</div>
     <p class="hint">삼성·구글 캘린더에 있는 공휴일 캘린더를 읽어 와요(읽기만 하고 바꾸지 않아요). 임시공휴일도 폰 캘린더에 뜨면 같이 반영돼요. 쉬지 않는 기념일은 회색 글씨로 보여요.</p>`;
@@ -844,6 +856,10 @@ $('#settings').addEventListener('click', e => {
   }
 });
 $('#settings').addEventListener('change', e => {
+  if (e.target.classList.contains('f-extra')) {
+    S.extraShow = Object.assign({}, S.extraShow, { [e.target.value]: e.target.checked });
+    save(); return;  // 설정 화면은 그대로 두고, 달력으로 돌아갈 때 반영
+  }
   if (e.target.classList.contains('f-cal')) {
     S.calSel = [...document.querySelectorAll('.f-cal:checked')].map(x => x.value);
     syncCalendar(); render(); return;
@@ -890,6 +906,13 @@ async function fetchWebHolidays(manual = false) {
   } catch (e) { if (manual) toast('공휴일을 받지 못했어요 — 인터넷 연결을 확인하세요'); }
 }
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') fetchWebHolidays(); });
+async function fetchExtras() {  // 작은 고정 파일 — 저장하지 않고 열 때마다 받는다(오프라인이면 서비스워커 캐시)
+  if (NATIVE) return;
+  try {
+    const r = await fetch('extras.json');
+    if (r.ok) { EXTRAS = (await r.json()).days || {}; if (!$('#sheetWrap').classList.contains('open')) render(); }
+  } catch (e) {}
+}
 
 // ---------- 시작 ----------
 if (!S) S = freshState();
@@ -900,6 +923,7 @@ if (!me()) openPattern(null, true);
 else maybeAskCalendar();
 if (!NATIVE) {
   fetchWebHolidays();
+  fetchExtras();
   try { navigator.storage && navigator.storage.persist && navigator.storage.persist(); } catch (e) {}  // 크롬이 저장소를 함부로 비우지 않게
   // 한 달 넘게 백업이 없으면 한 번 알려 준다
   if (me() && (!S.lastBackupAt || Date.now() - S.lastBackupAt > 30 * 86400000) && (!S.backupNagAt || Date.now() - S.backupNagAt > 7 * 86400000)) {
