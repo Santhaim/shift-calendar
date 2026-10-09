@@ -1,6 +1,6 @@
 // 오프라인용 — 네트워크 우선, 끊기면 캐시
-const CACHE = 'shiftcal-v3';
-const FILES = ['./', 'index.html', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'holidays.json', 'extras.json'];
+const CACHE = 'shiftcal-v4';
+const FILES = ['./', 'index.html', 'manifest.webmanifest', 'icon-180.png', 'icon-192.png', 'icon-512.png', 'holidays.json', 'extras.json'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)));
