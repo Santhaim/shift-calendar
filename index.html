@@ -85,6 +85,10 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;paddin
 /* 근무자 순서 바꾸기 — 이름을 길게 눌러 끌기 */
 .trow.dragrow{background:var(--sel);box-shadow:0 4px 16px rgba(0,0,0,.28);position:relative;z-index:3;outline:2px solid var(--accent);outline-offset:-2px}
 body.dragging{user-select:none;-webkit-user-select:none}
+/* 앱 전체 글자 선택·길게 누르기 메뉴 막기(10-13 · 크롬이 길게 누르기를 글자 선택으로 가져가 끌기가 안 됨) — 입력 칸만 예외 */
+body{user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+input,textarea,[contenteditable]{user-select:text;-webkit-user-select:text;-webkit-touch-callout:default}
+.ver{text-align:center;font-size:11px;color:var(--sub);margin:4px 0 18px}
 .team-hint{font-size:12px;color:var(--sub);text-align:center;margin:4px 14px 0}
 .tc,.th{display:flex;justify-content:center;align-items:center;min-width:0;cursor:pointer}
 .th{gap:2px;padding:0 2px;overflow:hidden}.th small{font-size:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:500}
@@ -186,6 +190,7 @@ details summary{cursor:pointer}
 <script>
 'use strict';
 const KEY = 'shiftcal.v1';
+const APP_VER = '2026.10.13-2';  // 설정 맨 아래에 보인다 — 폰에 새 판이 들어왔는지 확인용(고칠 때마다 올리기)
 
 const DEFAULT_TYPES = [
   { id: 'D', label: '주', name: '주간', color: '#FFD400', kind: 'fill' },
@@ -443,7 +448,8 @@ function renderSettings() {
       : '데이터는 이 휴대폰의 <b>크롬 안</b>에만 저장돼요. 크롬 데이터를 지우거나 폰을 바꾸면 사라지니 가끔 백업 파일을 저장해 두세요.'}
       ${S.lastBackupAt ? `<br>마지막 백업: ${Math.floor((Date.now() - S.lastBackupAt) / 86400000)}일 전` : '<br>아직 백업한 적이 없어요.'}</p>
     <div class="btns"><button class="btn" data-act="export">백업 파일 저장</button><button class="btn" data-act="import">백업 불러오기</button></div></div>
-  <div class="card"><div class="btns"><button class="btn danger" data-act="reset">전체 초기화</button></div></div>`;
+  <div class="card"><div class="btns"><button class="btn danger" data-act="reset">전체 초기화</button></div></div>
+  <p class="ver">근무달력 · 버전 ${APP_VER}</p>`;
 }
 
 function calCardHtml() {
@@ -878,7 +884,9 @@ teamEl.addEventListener('touchstart', e => { const n = e.target.closest('.tname[
 teamEl.addEventListener('touchmove', e => { if (drag && dragMove(e.touches[0].clientX, e.touches[0].clientY)) e.preventDefault(); }, { passive: false });
 teamEl.addEventListener('touchend', e => { if (dragFinish()) e.preventDefault(); }, { passive: false });
 teamEl.addEventListener('touchcancel', dragCancel);
-teamEl.addEventListener('contextmenu', e => { if (e.target.closest('.tname')) e.preventDefault(); });  // 길게 누를 때 뜨는 메뉴 막기
+// 길게 누를 때 뜨는 메뉴(복사·웹 검색) 막기 — 입력 칸은 그대로
+document.addEventListener('contextmenu', e => { if (!e.target.closest('input,textarea')) e.preventDefault(); });
+document.addEventListener('selectstart', e => { if (!e.target.closest || !e.target.closest('input,textarea')) e.preventDefault(); });
 // PC 마우스로도 같은 동작
 teamEl.addEventListener('mousedown', e => { const n = e.target.closest('.tname[data-pid]'); if (n && e.button === 0) dragBegin(n, e.clientX, e.clientY); });
 window.addEventListener('mousemove', e => { if (drag) dragMove(e.clientX, e.clientY); });
