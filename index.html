@@ -2,7 +2,8 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<!-- 확대 막기(10-13 사용자 요청) — 안드로이드는 이 줄, 아이폰은 아래 CSS touch-action + gesturestart 차단 -->
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#121316" media="(prefers-color-scheme: dark)">
 <title>근무달력</title>
@@ -18,7 +19,7 @@
 :root{--bg:#fff;--fg:#1f2328;--sub:#8b9096;--line:#eceef1;--soft:#f4f5f7;--sun:#e5484d;--sat:#2f6fec;--accent:#1677ff;--sel:#e8f1ff;--holbg:#ffe1e5;--mine:#fffbe6;--sheet:#fff}
 @media (prefers-color-scheme:dark){:root{--bg:#121316;--fg:#e9eaec;--sub:#8a8f98;--line:#2a2c31;--soft:#1f2125;--sun:#ff6b70;--sat:#6e9bff;--accent:#4d94ff;--sel:#1b2a44;--holbg:#3a1f25;--mine:#26230f;--sheet:#1c1e22}}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-html,body{margin:0;background:var(--bg);color:var(--fg);font-family:-apple-system,"Apple SD Gothic Neo","Noto Sans KR","Malgun Gothic",sans-serif}
+html,body{margin:0;background:var(--bg);color:var(--fg);font-family:-apple-system,"Apple SD Gothic Neo","Noto Sans KR","Malgun Gothic",sans-serif;touch-action:pan-x pan-y;-webkit-text-size-adjust:100%;text-size-adjust:100%}
 body{max-width:640px;margin:0 auto;min-height:100dvh;padding-bottom:calc(66px + env(safe-area-inset-bottom))}
 button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;padding:0}
 .top{position:sticky;top:0;z-index:5;background:var(--bg);display:flex;align-items:center;gap:2px;padding:calc(10px + env(safe-area-inset-top)) 10px 8px;height:calc(56px + env(safe-area-inset-top))}
@@ -935,6 +936,9 @@ async function fetchExtras() {  // 작은 고정 파일 — 저장하지 않고 
     if (r.ok) { EXTRAS = (await r.json()).days || {}; if (!$('#sheetWrap').classList.contains('open')) render(); }
   } catch (e) {}
 }
+
+// 아이폰 사파리는 user-scalable=no 를 무시하므로 두 손가락 확대 제스처를 직접 막는다
+for (const ev of ['gesturestart', 'gesturechange', 'gestureend']) document.addEventListener(ev, e => e.preventDefault(), { passive: false });
 
 // ---------- 시작 ----------
 if (!S) S = freshState();
