@@ -81,7 +81,11 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;paddin
 .trow:last-child{border-bottom:0}
 .trow.head{min-height:28px;font-size:13px;font-weight:600}
 .trow.mine{background:var(--mine)}
-.tname{font-size:12.5px;padding:0 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border-right:1px solid var(--line);display:flex;align-items:center;cursor:pointer}
+.tname{font-size:12.5px;padding:0 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border-right:1px solid var(--line);display:flex;align-items:center;cursor:pointer;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+/* 근무자 순서 바꾸기 — 이름을 길게 눌러 끌기 */
+.trow.dragrow{background:var(--sel);box-shadow:0 4px 16px rgba(0,0,0,.28);position:relative;z-index:3;outline:2px solid var(--accent);outline-offset:-2px}
+body.dragging{user-select:none;-webkit-user-select:none}
+.team-hint{font-size:12px;color:var(--sub);text-align:center;margin:4px 14px 0}
 .tc,.th{display:flex;justify-content:center;align-items:center;min-width:0;cursor:pointer}
 .th{gap:2px;padding:0 2px;overflow:hidden}.th small{font-size:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:500}
 .th.sun{color:var(--sun)}.th.sat{color:var(--sat)}
@@ -389,7 +393,7 @@ function renderStats() {
 // ---------- 화면: 근무자 ----------
 function renderTeam() {
   const { m, startNum, weeks } = monthFrame();
-  const list = [me(), ...others()].filter(Boolean), tk = todayKey();
+  const list = S.people, tk = todayKey();  // 저장된 순서 그대로(이름 길게 눌러 끌어서 바꿈)
   let html = '';
   for (let w = 0; w < weeks; w++) {
     html += '<div class="tw"><div class="trow head"><div class="tname"></div>';
@@ -410,6 +414,7 @@ function renderTeam() {
     html += '</div>';
   }
   if (!others().length) html += '<div class="empty">아래 「+ 근무자 추가」로 다른 사람 근무표를 넣거나,<br>설정 → 「공유 코드로 근무자 추가」로 받은 코드를 붙여넣으세요.</div>';
+  else html += '<p class="team-hint">이름을 길게 누른 채 위아래로 끌면 순서가 바뀌어요 · 이름을 짧게 누르면 수정</p>';
   $('#team').innerHTML = html;
 }
 
@@ -824,7 +829,63 @@ document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => {
 });
 
 $('#grid').addEventListener('click', e => { const c = e.target.closest('.cell'); if (c) openDay(c.dataset.k); });
+// ---------- 근무자 순서 바꾸기: 이름 길게 누르기(0.45초) → 위아래로 끌기 → 놓으면 저장 ----------
+// 손가락이 0.45초 안에 움직이면 평범한 스크롤로 본다. 끄는 동안만 화면 스크롤을 막는다.
+let drag = null, dragEndedAt = 0;
+function dragBegin(n, x, y) {
+  dragCancel();
+  drag = { pid: n.dataset.pid, block: n.closest('.tw'), x, y, active: false };
+  drag.timer = setTimeout(() => {
+    if (!drag) return;
+    drag.active = true; tx = null;  // 달 넘기기 스와이프로 읽히지 않게
+    drag.row = n.closest('.trow');
+    drag.row.classList.add('dragrow'); document.body.classList.add('dragging');
+    try { navigator.vibrate && navigator.vibrate(15); } catch (e) {}
+  }, 450);
+}
+function dragMove(x, y) {
+  if (!drag) return false;
+  if (!drag.active) { if (Math.hypot(x - drag.x, y - drag.y) > 10) dragCancel(); return false; }
+  const rows = [...drag.block.querySelectorAll('.trow:not(.head)')].filter(r => r !== drag.row);
+  const before = rows.find(r => { const b = r.getBoundingClientRect(); return y < b.top + b.height / 2; });
+  if (before) { if (drag.row.nextElementSibling !== before) drag.block.insertBefore(drag.row, before); }
+  else if (drag.row !== drag.block.lastElementChild) drag.block.appendChild(drag.row);
+  return true;
+}
+function dragFinish() {
+  if (!drag) return false;
+  const wasActive = drag.active;
+  if (wasActive) {
+    const order = [...drag.block.querySelectorAll('.trow:not(.head) .tname')].map(n => n.dataset.pid);
+    const moved = order.join() !== S.people.map(p => p.id).join();
+    S.people = order.map(id => S.people.find(p => p.id === id)).filter(Boolean);
+    dragEndedAt = Date.now();
+    if (moved) { save(); toast('순서를 바꿨어요'); }
+  }
+  dragCancel();
+  if (wasActive) render();
+  return wasActive;
+}
+function dragCancel() {
+  if (!drag) return;
+  clearTimeout(drag.timer);
+  if (drag.row) drag.row.classList.remove('dragrow');
+  document.body.classList.remove('dragging');
+  drag = null;
+}
+const teamEl = $('#team');
+teamEl.addEventListener('touchstart', e => { const n = e.target.closest('.tname[data-pid]'); if (n && e.touches.length === 1) dragBegin(n, e.touches[0].clientX, e.touches[0].clientY); }, { passive: true });
+teamEl.addEventListener('touchmove', e => { if (drag && dragMove(e.touches[0].clientX, e.touches[0].clientY)) e.preventDefault(); }, { passive: false });
+teamEl.addEventListener('touchend', e => { if (dragFinish()) e.preventDefault(); }, { passive: false });
+teamEl.addEventListener('touchcancel', dragCancel);
+teamEl.addEventListener('contextmenu', e => { if (e.target.closest('.tname')) e.preventDefault(); });  // 길게 누를 때 뜨는 메뉴 막기
+// PC 마우스로도 같은 동작
+teamEl.addEventListener('mousedown', e => { const n = e.target.closest('.tname[data-pid]'); if (n && e.button === 0) dragBegin(n, e.clientX, e.clientY); });
+window.addEventListener('mousemove', e => { if (drag) dragMove(e.clientX, e.clientY); });
+window.addEventListener('mouseup', () => { dragFinish(); });
+
 $('#team').addEventListener('click', e => {
+  if (Date.now() - dragEndedAt < 400) return;  // 끌기를 마친 손을 「이름 누름」으로 보지 않게
   const n = e.target.closest('.tname[data-pid]'); if (n) return openPattern(n.dataset.pid);
   const c = e.target.closest('.tc'); if (c) return openDay(c.dataset.k, c.dataset.pid);
   const h = e.target.closest('.th'); if (h) openDay(h.dataset.k);  // 날짜 줄을 누르면 내 날짜 창(전체 이름)
