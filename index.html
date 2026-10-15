@@ -150,6 +150,9 @@ textarea{min-height:90px;resize:vertical}
 details summary{cursor:pointer}
 .toast{position:fixed;left:50%;bottom:calc(84px + env(safe-area-inset-bottom));transform:translateX(-50%) translateY(20px);background:rgba(30,30,30,.92);color:#fff;padding:10px 16px;border-radius:10px;font-size:14px;opacity:0;pointer-events:none;transition:.2s;z-index:30;max-width:90vw;text-align:center}
 .toast.on{opacity:1;transform:translateX(-50%)}
+.shot-btn{margin-left:4px;display:flex;align-items:center;justify-content:center;color:var(--fg)}
+.shot-btn svg{width:24px;height:24px}
+.shot{display:block;width:100%;max-height:58dvh;object-fit:contain;border:1px solid var(--line);border-radius:10px;margin-top:12px;background:#fff}
 .codebox{font-family:ui-monospace,Consolas,monospace;font-size:12px;word-break:break-all;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px;max-height:120px;overflow:auto;user-select:all}
 </style>
 </head>
@@ -159,6 +162,7 @@ details summary{cursor:pointer}
   <h1><button id="title" aria-label="년·월 선택"></button></h1>
   <button id="next" class="icon-btn" aria-label="다음 달">›</button>
   <button id="todayBtn" class="pill">오늘</button>
+  <button id="shotBtn" class="icon-btn shot-btn" aria-label="이미지로 저장"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13.5" r="3.5"/></svg></button>
 </header>
 
 <main id="main">
@@ -190,7 +194,7 @@ details summary{cursor:pointer}
 <script>
 'use strict';
 const KEY = 'shiftcal.v1';
-const APP_VER = '2026.10.13-3';  // 설정 맨 아래에 보인다 — 폰에 새 판이 들어왔는지 확인용(고칠 때마다 올리기)
+const APP_VER = '2026.10.15-1';  // 설정 맨 아래에 보인다 — 폰에 새 판이 들어왔는지 확인용(고칠 때마다 올리기)
 
 const DEFAULT_TYPES = [
   { id: 'D', label: '주', name: '주간', color: '#FFD400', kind: 'fill' },
@@ -820,8 +824,178 @@ function fitCal() {
 }
 window.addEventListener('resize', fitCal);
 
+// ---------- 이미지로 저장(📷) ----------
+// 화면을 찍는 게 아니라 데이터로 «한 달 전체»를 캔버스에 새로 그린다 → 잘림 없음 · 다크 모드여도 밝은 이미지(남에게 보내기 좋게)
+const IMG = { bg: '#ffffff', fg: '#1f2328', sub: '#8b9096', line: '#e3e5e8', sun: '#e5484d', sat: '#2f6fec', holbg: '#ffe1e5', soft: '#f4f5f7', mine: '#fff8d6' };
+const IMG_FONT = '"Noto Sans KR","Apple SD Gothic Neo","Malgun Gothic",sans-serif';
+function fitText(x, s, w) {
+  s = String(s);
+  if (x.measureText(s).width <= w) return s;
+  while (s && x.measureText(s + '…').width > w) s = s.slice(0, -1);
+  return s ? s + '…' : '';
+}
+function wrapLines(x, s, w, max) {
+  const out = [];
+  for (const para of String(s).split('\n')) {
+    let line = '';
+    for (const ch of para) { if (line && x.measureText(line + ch).width > w) { out.push(line); line = ch; } else line += ch; }
+    out.push(line);
+  }
+  if (out.length > max) { out.length = max; out[max - 1] = fitText(x, out[max - 1] + '……', w); }
+  return out;
+}
+function newCanvas(w, h) {
+  const c = document.createElement('canvas'); c.width = w; c.height = h;
+  const x = c.getContext('2d'); x.fillStyle = IMG.bg; x.fillRect(0, 0, w, h); x.textBaseline = 'middle';
+  return [c, x];
+}
+function rrect(x, l, t, w, h, r) { x.beginPath(); if (x.roundRect) x.roundRect(l, t, w, h, r); else x.rect(l, t, w, h); }
+function drawBadge(x, id, cx, cy, r) {
+  const t = typeOf(id); if (!t) return;
+  const c = safeColor(t.color);
+  x.textAlign = 'center';
+  if (t.kind === 'fill') {
+    x.fillStyle = c; x.beginPath(); x.arc(cx, cy, r, 0, Math.PI * 2); x.fill();
+    x.fillStyle = textOn(c); x.font = `800 ${Math.round(r * 0.95)}px ${IMG_FONT}`;
+  } else { x.fillStyle = c; x.font = `800 ${Math.round(r * 1.15)}px ${IMG_FONT}`; }
+  x.fillText(t.label, cx, cy + 1);
+}
+function drawFooter(x, W, H) {
+  x.globalAlpha = 1; x.fillStyle = IMG.sub; x.font = `500 20px ${IMG_FONT}`; x.textAlign = 'right';
+  x.fillText('근무달력', W - 28, H - 24);
+}
+
+function drawCal() {
+  const { y, m, startNum, weeks } = monthFrame(), p = me();
+  const W = 1080, P = 28, top = 120, dowH = 54, cellH = 178, cw = (W - P * 2) / 7, statsH = 80, foot = 48;
+  const H = top + dowH + weeks * cellH + statsH + foot;
+  const [c, x] = newCanvas(W, H);
+  x.textAlign = 'left'; x.fillStyle = IMG.fg; x.font = `800 50px ${IMG_FONT}`; x.fillText(`${y}년 ${m + 1}월`, P, 64);
+  x.textAlign = 'right'; x.fillStyle = IMG.sub; x.font = `600 28px ${IMG_FONT}`; x.fillText(`${p ? p.name : ''} 근무표`, W - P, 66);
+  [...DOW].forEach((d, i) => {
+    x.fillStyle = i === 0 ? IMG.sun : i === 6 ? IMG.sat : IMG.sub; x.font = `600 26px ${IMG_FONT}`; x.textAlign = 'center';
+    x.fillText(d, P + cw * i + cw / 2, top + dowH / 2);
+  });
+  const gy = top + dowH;
+  for (let i = 0; i < weeks * 7; i++) {
+    const k = keyFromNum(startNum + i), { d, m: mm } = parseKey(k), dow = i % 7;
+    const cx = P + cw * dow, cy = gy + cellH * Math.floor(i / 7), hol = holidayOf(k), anni = anniOf(k);
+    x.globalAlpha = mm !== m ? 0.35 : 1;
+    if (hol) { x.fillStyle = IMG.holbg; rrect(x, cx + 5, cy + 6, cw - 10, 38, 8); x.fill(); }
+    x.textAlign = 'left'; x.font = `700 28px ${IMG_FONT}`;
+    x.fillStyle = hol || dow === 0 ? IMG.sun : dow === 6 ? IMG.sat : IMG.fg;
+    x.fillText(String(d), cx + 12, cy + 26);
+    const nw = x.measureText(String(d)).width;
+    const lab = hol || anni;
+    if (lab) {
+      x.font = `500 18px ${IMG_FONT}`; x.fillStyle = hol ? IMG.sun : IMG.sub; x.textAlign = 'right';
+      x.fillText(fitText(x, lab, cw - nw - 30), cx + cw - 10, cy + 26);
+    }
+    drawBadge(x, shiftOf(p, k), cx + cw / 2, cy + 84, 36);
+    const memo = S.memos[k];
+    if (memo && p) {
+      x.font = `500 19px ${IMG_FONT}`;
+      const lines = wrapLines(x, memo, cw - 22, 2), mc = memoColor(S.memoColors[k]);
+      const bh = lines.length * 24 + 8, by = cy + 128;
+      x.fillStyle = mc ? mc.hex + '55' : IMG.soft; rrect(x, cx + 6, by, cw - 12, bh, 6); x.fill();
+      if (mc) { x.fillStyle = mc.hex; x.fillRect(cx + 6, by, 4, bh); }
+      x.fillStyle = IMG.fg; x.textAlign = 'left';
+      lines.forEach((ln, j) => x.fillText(ln, cx + 14, by + 16 + j * 24));
+    }
+  }
+  x.globalAlpha = 1; x.strokeStyle = IMG.line; x.lineWidth = 2;
+  for (let r = 0; r <= weeks; r++) { x.beginPath(); x.moveTo(P, gy + r * cellH); x.lineTo(W - P, gy + r * cellH); x.stroke(); }
+  for (let col = 1; col < 7; col++) { x.beginPath(); x.moveTo(P + cw * col, gy); x.lineTo(P + cw * col, gy + weeks * cellH); x.stroke(); }
+  // 이달 근무 수
+  if (p) {
+    const days = new Date(y, m + 1, 0).getDate(), cnt = {};
+    for (let d = 1; d <= days; d++) { const s = shiftOf(p, keyOf(y, m, d)); if (s) cnt[s] = (cnt[s] || 0) + 1; }
+    let sx = P, sy = gy + weeks * cellH + statsH / 2;
+    x.textAlign = 'left'; x.fillStyle = IMG.sub; x.font = `600 24px ${IMG_FONT}`; x.fillText(`${m + 1}월`, sx, sy); sx += 70;
+    for (const t of S.types) {
+      if (!cnt[t.id]) continue;
+      drawBadge(x, t.id, sx + 20, sy, 20);
+      x.textAlign = 'left'; x.fillStyle = IMG.fg; x.font = `700 26px ${IMG_FONT}`; x.fillText(String(cnt[t.id]), sx + 48, sy);
+      sx += 48 + x.measureText(String(cnt[t.id])).width + 30;
+    }
+  }
+  drawFooter(x, W, H);
+  return c;
+}
+
+function drawTeam() {
+  const { y, m, startNum, weeks } = monthFrame(), list = S.people;
+  const W = 1080, P = 20, nameW = 172, cw = (W - P * 2 - nameW) / 7, top = 110, headH = 52, rowH = 76, gap = 18, foot = 48;
+  const H = top + weeks * (headH + list.length * rowH + gap) + foot;
+  const [c, x] = newCanvas(W, H);
+  x.textAlign = 'left'; x.fillStyle = IMG.fg; x.font = `800 48px ${IMG_FONT}`; x.fillText(`${y}년 ${m + 1}월 근무표`, P + 4, 60);
+  let yy = top;
+  for (let w = 0; w < weeks; w++) {
+    x.globalAlpha = 1; x.fillStyle = IMG.soft; x.fillRect(P, yy, W - P * 2, headH);
+    for (let i = 0; i < 7; i++) {
+      const k = keyFromNum(startNum + w * 7 + i), { d, m: mm } = parseKey(k), hol = holidayOf(k), cx = P + nameW + cw * i;
+      x.globalAlpha = mm !== m ? 0.35 : 1;
+      x.fillStyle = hol || i === 0 ? IMG.sun : i === 6 ? IMG.sat : IMG.fg;
+      x.font = `700 24px ${IMG_FONT}`;
+      if (hol) {
+        x.textAlign = 'left'; x.fillText(String(d), cx + 8, yy + headH / 2);
+        const nw = x.measureText(String(d)).width;
+        x.font = `500 15px ${IMG_FONT}`; x.fillText(fitText(x, hol, cw - nw - 18), cx + 12 + nw, yy + headH / 2 + 1);
+      } else { x.textAlign = 'center'; x.fillText(String(d), cx + cw / 2, yy + headH / 2); }
+    }
+    yy += headH;
+    for (const p of list) {
+      x.globalAlpha = 1;
+      if (p.me) { x.fillStyle = IMG.mine; x.fillRect(P, yy, W - P * 2, rowH); }
+      x.fillStyle = IMG.fg; x.font = `600 24px ${IMG_FONT}`; x.textAlign = 'left';
+      x.fillText(fitText(x, p.name, nameW - 20), P + 10, yy + rowH / 2);
+      for (let i = 0; i < 7; i++) {
+        const k = keyFromNum(startNum + w * 7 + i), { m: mm } = parseKey(k);
+        x.globalAlpha = mm !== m ? 0.35 : 1;
+        drawBadge(x, shiftOf(p, k), P + nameW + cw * i + cw / 2, yy + rowH / 2, 26);
+      }
+      x.globalAlpha = 1; x.strokeStyle = IMG.line; x.lineWidth = 1.5;
+      x.beginPath(); x.moveTo(P, yy + rowH); x.lineTo(W - P, yy + rowH); x.stroke();
+      yy += rowH;
+    }
+    x.strokeStyle = IMG.line; x.lineWidth = 1.5;
+    x.beginPath(); x.moveTo(P + nameW, yy - list.length * rowH - headH); x.lineTo(P + nameW, yy); x.stroke();
+    yy += gap;
+  }
+  drawFooter(x, W, H);
+  return c;
+}
+
+async function openShot() {
+  const isTeam = tab === 'team';
+  if (isTeam ? !S.people.length : !me()) return toast('먼저 근무를 넣어 주세요');
+  const cv = isTeam ? drawTeam() : drawCal();
+  const blob = await new Promise(r => cv.toBlob(r, 'image/png'));
+  if (!blob) return toast('이미지를 만들지 못했어요');
+  const name = `근무표-${view.y}${pad(view.m + 1)}${isTeam ? '-근무자' : ''}.png`;
+  const file = new File([blob], name, { type: 'image/png' });
+  const url = URL.createObjectURL(blob);
+  const canShare = !!(navigator.canShare && navigator.canShare({ files: [file] }));
+  openSheet(`
+    <div class="sh-title">이미지로 저장 <span class="who">${view.y}년 ${view.m + 1}월 · ${isTeam ? '근무자 전체' : '내 달력'}</span></div>
+    <img class="shot" src="${url}" alt="근무표 이미지">
+    <div class="actions">
+      <button class="ghost" data-act="dl">기기에 저장</button>
+      ${canShare ? '<button class="primary" data-act="share">보내기 · 갤러리 저장</button>' : ''}
+    </div>`,
+  async e => {
+    const act = e.target.closest('[data-act]')?.dataset.act;
+    if (act === 'share') { try { await navigator.share({ files: [file], title: name }); } catch (err) {} }
+    else if (act === 'dl') {
+      const a = document.createElement('a'); a.href = url; a.download = name;
+      document.body.appendChild(a); a.click(); a.remove(); toast('다운로드 폴더에 저장했어요');
+    }
+  }, false, () => setTimeout(() => URL.revokeObjectURL(url), 1000));
+}
+
 // ---------- 이벤트 ----------
 $('#title').onclick = openMonthPicker;
+$('#shotBtn').onclick = openShot;
 $('#prev').onclick = () => moveMonth(-1);
 $('#next').onclick = () => moveMonth(1);
 $('#todayBtn').onclick = () => { const t = new Date(); view = { y: t.getFullYear(), m: t.getMonth() }; render(); };
