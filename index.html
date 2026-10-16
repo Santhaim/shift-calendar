@@ -58,8 +58,7 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;paddin
 .stats{flex:none;display:flex;flex-wrap:wrap;gap:4px 14px;padding:7px 14px;border-bottom:1px solid var(--line);font-size:14px;align-items:center}
 .stats .st{display:flex;align-items:center;gap:6px}
 .stats .t{color:var(--sub);font-size:13px}
-.mmemo{flex:none;padding:8px 14px}
-.mmemo textarea{min-height:0;height:58px;resize:none;font-size:15px;padding:8px 10px}
+/* 월별 메모 칸은 10-16 사용자 요청으로 뺐다(그 자리만큼 달력 칸이 커짐) · 예전 데이터 S.monthMemos 는 지우지 않고 둔다 */
 /* 년·월 휠 */
 .wheels{position:relative;isolation:isolate;display:grid;grid-template-columns:1fr 1fr;height:220px;margin-top:14px;-webkit-mask-image:linear-gradient(transparent,#000 30%,#000 70%,transparent);mask-image:linear-gradient(transparent,#000 30%,#000 70%,transparent)}
 .wheel{overflow-y:scroll;scroll-snap-type:y mandatory;scrollbar-width:none;overscroll-behavior:contain}
@@ -171,7 +170,6 @@ details summary{cursor:pointer}
     <div class="dow"><span>일</span><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span>토</span></div>
     <div id="grid" class="grid"></div>
     <div id="stats" class="stats"></div>
-    <div class="mmemo"><textarea id="monthMemo" placeholder="월별 메모"></textarea></div>
   </section>
   <section id="tab-team" class="tab">
     <div class="team-dow"><span></span><span>일</span><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span>토</span></div>
@@ -195,7 +193,7 @@ details summary{cursor:pointer}
 <script>
 'use strict';
 const KEY = 'shiftcal.v1';
-const APP_VER = '2026.10.16-1';  // 설정 맨 아래에 보인다 — 폰에 새 판이 들어왔는지 확인용(고칠 때마다 올리기)
+const APP_VER = '2026.10.16-2';  // 설정 맨 아래에 보인다 — 폰에 새 판이 들어왔는지 확인용(고칠 때마다 올리기)
 
 const DEFAULT_TYPES = [
   { id: 'D', label: '주', name: '주간', color: '#FFD400', kind: 'fill' },
@@ -388,7 +386,6 @@ function renderCal() {
   g.style.gridTemplateRows = `repeat(${weeks}, minmax(0, 1fr))`;
   g.classList.toggle('w6', weeks === 6);
   renderStats();
-  $('#monthMemo').value = S.monthMemos[ymKey(view.y, view.m)] || '';
 }
 
 function renderStats() {
@@ -1082,11 +1079,6 @@ $('#importFile').addEventListener('change', e => {
   const f = e.target.files[0];
   e.target.value = '';
   if (f) importBackup(f); else toast('파일을 고르지 않았어요');
-});
-$('#monthMemo').addEventListener('input', e => {
-  const k = ymKey(view.y, view.m), v = e.target.value;
-  if (v.trim()) S.monthMemos[k] = v; else delete S.monthMemos[k];
-  save();
 });
 
 $('#settings').addEventListener('click', e => {
