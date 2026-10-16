@@ -20,7 +20,7 @@
 @media (prefers-color-scheme:dark){:root{--bg:#121316;--fg:#e9eaec;--sub:#8a8f98;--line:#2a2c31;--soft:#1f2125;--sun:#ff6b70;--sat:#6e9bff;--accent:#4d94ff;--sel:#1b2a44;--holbg:#3a1f25;--mine:#26230f;--sheet:#1c1e22}}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;background:var(--bg);color:var(--fg);font-family:-apple-system,"Apple SD Gothic Neo","Noto Sans KR","Malgun Gothic",sans-serif;touch-action:pan-x pan-y;-webkit-text-size-adjust:100%;text-size-adjust:100%}
-body{max-width:640px;margin:0 auto;min-height:100dvh;padding-bottom:calc(66px + env(safe-area-inset-bottom))}
+body{max-width:640px;margin:0 auto;padding-bottom:calc(66px + env(safe-area-inset-bottom))}
 button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;padding:0}
 .top{position:sticky;top:0;z-index:5;background:var(--bg);display:flex;align-items:center;gap:2px;padding:calc(10px + env(safe-area-inset-top)) 10px 8px;height:calc(56px + env(safe-area-inset-top))}
 .top h1{margin:0}
@@ -193,7 +193,7 @@ details summary{cursor:pointer}
 <script>
 'use strict';
 const KEY = 'shiftcal.v1';
-const APP_VER = '2026.10.16-2';  // 설정 맨 아래에 보인다 — 폰에 새 판이 들어왔는지 확인용(고칠 때마다 올리기)
+const APP_VER = '2026.10.16-3';  // 설정 맨 아래에 보인다 — 폰에 새 판이 들어왔는지 확인용(고칠 때마다 올리기)
 
 const DEFAULT_TYPES = [
   { id: 'D', label: '주', name: '주간', color: '#FFD400', kind: 'fill' },
@@ -816,9 +816,11 @@ function markWheel(w) { const i = wheelIdx(w); w.querySelectorAll('.wi').forEach
 // 키보드가 올라와 화면이 줄 때(메모 입력 중)는 줄이지 않는다 — 달력이 찌그러지지 않게
 let fitH = 0;
 function fitCal() {
-  const tabsH = $('.tabs').offsetHeight;
+  // 🔴 offsetHeight 는 정수로 반올림된다 — 폰(DPR 3.5)에선 머리줄·탭바가 56.4px 같은 소수라 합이 화면보다
+  //    1px 미만 커져 스크롤이 생겼다(10-16 월별 메모 뺀 뒤). 소수 높이로 재고 내림 + 1px 여유.
+  const tabsH = $('.tabs').getBoundingClientRect().height;
   document.body.style.paddingBottom = tabsH + 'px';
-  const h = window.innerHeight - $('#top').offsetHeight - tabsH;
+  const h = Math.floor(window.innerHeight - $('#top').getBoundingClientRect().height - tabsH) - 1;
   const typing = /^(TEXTAREA|INPUT)$/.test(document.activeElement?.tagName || '');
   if (typing && h < fitH) return;
   fitH = h;
