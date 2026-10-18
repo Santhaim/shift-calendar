@@ -149,7 +149,16 @@ textarea{min-height:90px;resize:vertical}
 details summary{cursor:pointer}
 .toast{position:fixed;left:50%;bottom:calc(84px + env(safe-area-inset-bottom));transform:translateX(-50%) translateY(20px);background:rgba(30,30,30,.92);color:#fff;padding:10px 16px;border-radius:10px;font-size:14px;opacity:0;pointer-events:none;transition:.2s;z-index:30;max-width:90vw;text-align:center}
 .toast.on{opacity:1;transform:translateX(-50%)}
-.memo-del{margin-left:auto;font-size:13px;font-weight:700;color:var(--sun);padding:4px 8px;border-radius:8px;background:var(--holbg)}
+/* 날짜 창 메모 목록(하루 여러 개) */
+.memo-item{margin-bottom:12px}
+.memo-item .dm{min-height:0;height:64px}
+.mrow{display:flex;align-items:center;gap:6px;margin-top:6px}
+.mrow .mcolors{flex:1;margin-top:0;gap:5px;flex-wrap:nowrap;min-width:0}
+.mrow .mc{width:24px;height:24px;flex:none}
+.mrow .mc:first-child{width:auto;padding:0 8px;white-space:nowrap;font-size:11px}
+.memo-del{flex:none;font-size:15px;padding:5px 9px;border-radius:8px;background:var(--holbg);color:var(--sun)}
+.memo-add{display:block;width:100%;padding:10px;border:1.5px dashed var(--line);border-radius:10px;color:var(--accent);font-weight:700;font-size:14px}
+.cell .memo.one{-webkit-line-clamp:1}
 .shot-btn{margin-left:4px;display:flex;align-items:center;justify-content:center;color:var(--fg)}
 .shot-btn svg{width:24px;height:24px}
 .shot{display:block;width:100%;max-height:58dvh;object-fit:contain;border:1px solid var(--line);border-radius:10px;margin-top:12px;background:#fff}
@@ -193,7 +202,7 @@ details summary{cursor:pointer}
 <script>
 'use strict';
 const KEY = 'shiftcal.v1';
-const APP_VER = '2026.10.16-3';  // 설정 맨 아래에 보인다 — 폰에 새 판이 들어왔는지 확인용(고칠 때마다 올리기)
+const APP_VER = '2026.10.18-1';  // 설정 맨 아래에 보인다 — 폰에 새 판이 들어왔는지 확인용(고칠 때마다 올리기)
 
 const DEFAULT_TYPES = [
   { id: 'D', label: '주', name: '주간', color: '#FFD400', kind: 'fill' },
@@ -286,6 +295,18 @@ const MEMO_COLORS = [
   { id: 'gray', name: '회색', hex: '#8B8D98' },
 ];
 const memoColor = id => (id && MEMO_COLORS.find(c => c.id === id)) || null;
+// 날짜 메모 = [{t: 글, c: 색}] 최대 MEMO_MAX 개(10-18). 예전 판은 S.memos[k]=글 하나 + S.memoColors[k] → migrateMemos 가 옮긴다
+const MEMO_MAX = 4;
+const memosOf = k => (Array.isArray(S.memos[k]) ? S.memos[k] : []);
+function migrateMemos(s) {
+  const old = s.memoColors || {};
+  for (const [k, v] of Object.entries(s.memos || {})) {
+    if (typeof v === 'string') { if (v.trim()) s.memos[k] = [{ t: v, c: old[k] || '' }]; else delete s.memos[k]; }
+    else if (!Array.isArray(v) || !v.length) delete s.memos[k];
+  }
+  s.memoColors = {};
+  return s;
+}
 function memoStyle(id, field = false) {
   const c = memoColor(id);
   if (!c) return '';
@@ -300,7 +321,7 @@ function load() {
   for (const raw of tries) {
     try {
       const s = JSON.parse(raw);
-      if (s && Array.isArray(s.people) && Array.isArray(s.types)) return Object.assign(freshState(), s);
+      if (s && Array.isArray(s.people) && Array.isArray(s.types)) return migrateMemos(Object.assign(freshState(), s));
     } catch (e) {}
   }
   return null;
@@ -373,13 +394,13 @@ function renderCal() {
   let html = '';
   for (let i = 0; i < weeks * 7; i++) {
     const k = keyFromNum(startNum + i), { d, m: mm } = parseKey(k), dow = i % 7, hol = holidayOf(k), anni = anniOf(k);
-    const sh = shiftOf(p, k), memo = S.memos[k];
+    const sh = shiftOf(p, k), memos = memosOf(k);
     const ov = p && p.overrides && Object.prototype.hasOwnProperty.call(p.overrides, k);
     const dc = hol ? 'holi' : dow === 0 ? 'sun' : dow === 6 ? 'sat' : '';
     html += `<div class="cell${mm !== m ? ' out' : ''}${k === tk ? ' today' : ''}" data-k="${k}">
       <div class="dn ${dc}"><span>${d}</span>${hol ? `<span class="hol">${esc(hol)}</span>` : anni ? `<span class="hol anni">${esc(anni)}</span>` : ''}</div>
       <div class="sh">${badge(sh)}${ov ? '<i class="ov"></i>' : ''}</div>
-      ${memo ? `<div class="memo"${memoStyle(S.memoColors[k])}>${esc(memo)}</div>` : ''}</div>`;
+      ${memos.map(mm => `<div class="memo${memos.length > 1 ? ' one' : ''}"${memoStyle(mm.c)}>${esc(mm.t)}</div>`).join('')}</div>`;
   }
   const g = $('#grid');
   g.innerHTML = html;
@@ -513,7 +534,9 @@ function openDay(k, pid) {
   const p = pid ? S.people.find(x => x.id === pid) : me();
   if (!p) return;
   const { m, d } = parseKey(k), lb = dayLabels(k);
-  let mc = S.memos[k] ? (S.memoColors[k] || '') : (S.lastMemoColor || '');
+  // 메모는 하루 최대 MEMO_MAX 개(10-18) — 창 안에서는 items(작업본)를 고치고, 닫힐 때 commitDay 가 S 에 쓴다
+  let items = memosOf(k).map(mm => ({ t: mm.t, c: mm.c || '' }));
+  if (p.me && !items.length) items.push({ t: '', c: S.lastMemoColor || '' });
   const base = patternShift(p, k), cur = shiftOf(p, k);
   const ov = p.overrides && Object.prototype.hasOwnProperty.call(p.overrides, k);
   const bt = typeOf(base);
@@ -527,9 +550,8 @@ function openDay(k, pid) {
     </div>
     ${ov ? `<button class="link" data-act="resetOv">↺ 패턴대로 되돌리기 (${bt ? esc(bt.name) : '없음'})</button>` : ''}
     ${p.me ? `
-    <div class="lbl">메모${S.memos[k] ? '<button class="memo-del" data-act="clearMemo">🗑 메모 지우기</button>' : ''}</div>
-    <textarea id="dayMemo" placeholder="예: 회식 7시, 병원 예약"${memoStyle(mc, true)}>${esc(S.memos[k] || '')}</textarea>
-    <div class="mcolors">${MEMO_COLORS.map(c => `<button class="mc${c.id === mc ? ' on' : ''}" data-mc="${c.id}" title="${c.name}" aria-label="${c.name}" style="${c.id ? `background:${c.hex}` : ''}">${c.id ? '' : '기본'}</button>`).join('')}</div>
+    <div class="lbl">메모 <span class="sub">하루 ${MEMO_MAX}개까지 · 메모마다 색</span></div>
+    <div id="memoList"></div>
     <details style="margin-top:12px"><summary class="sub">휴일 직접 표시</summary>
       <input type="text" id="dayHol" style="margin-top:8px" placeholder="${HOLIDAYS[k] ? esc(HOLIDAYS[k]) + ' (기본)' : '예: 창립기념일'}" value="${esc(S.holidays[k] || '')}" maxlength="10">
     </details>` : ''}
@@ -537,11 +559,23 @@ function openDay(k, pid) {
   e => {
     const tb = e.target.closest('[data-t]'), act = e.target.closest('[data-act]')?.dataset.act;
     const mb = e.target.closest('[data-mc]');
-    if (mb) {  // 메모 색 — 창은 그대로 두고 그 자리에서만 바꾼다
-      mc = mb.dataset.mc;
-      document.querySelectorAll('.mc').forEach(x => x.classList.toggle('on', x === mb));
-      const ta = $('#dayMemo'), st = memoColor(mc);
-      ta.style.background = st ? st.hex + '33' : ''; ta.style.borderColor = st ? st.hex : '';
+    if (mb) {  // 메모 색 — 그 메모만, 창은 그대로
+      syncMemos(); items[+mb.dataset.i].c = mb.dataset.mc; renderMemoList();
+      return;
+    }
+    if (act === 'addMemo') {
+      syncMemos(); items.push({ t: '', c: S.lastMemoColor || '' }); renderMemoList();
+      const tas = document.querySelectorAll('#memoList .dm'); tas[tas.length - 1]?.focus();
+      return;
+    }
+    if (act === 'delMemo') {
+      syncMemos();
+      const i = +e.target.closest('[data-act]').dataset.i;
+      if (items[i].t.trim() && !confirm('이 메모를 지울까요?')) return;
+      items.splice(i, 1);
+      if (!items.length) items.push({ t: '', c: S.lastMemoColor || '' });
+      // 🔴 화면을 먼저 다시 그린 뒤 저장 — commitDay 가 화면 글자를 다시 읽으므로, 옛 화면이면 글자가 한 칸씩 밀린다
+      renderMemoList(); commitDay(k); save(); render(); toast('메모를 지웠어요');
       return;
     }
     if (tb) {
@@ -551,19 +585,29 @@ function openDay(k, pid) {
       commitDay(k); save(); render(); openDay(k, pid);
     } else if (act === 'resetOv') {
       delete p.overrides[k]; commitDay(k); save(); render(); openDay(k, pid);
-    } else if (act === 'clearMemo') {  // 메모 지우기(10-16 사용자 요청) — 창은 그대로 두고 비운다
-      if (!confirm('이 날 메모를 지울까요?')) return;
-      $('#dayMemo').value = ''; mc = '';
-      commitDay(k); save(); render(); openDay(k, pid); toast('메모를 지웠어요');
     } else if (act === 'done') closeSheet();  // 저장은 beforeClose 가
   }, false, () => { commitDay(k); save(); });
+  renderMemoList();
+
+  function syncMemos() {  // 화면의 글자 → items
+    document.querySelectorAll('#memoList .dm').forEach(ta => { const it = items[+ta.dataset.i]; if (it) it.t = ta.value; });
+  }
+  function renderMemoList() {
+    const box = $('#memoList'); if (!box) return;
+    box.innerHTML = items.map((mm, i) => `<div class="memo-item">
+        <textarea class="dm" data-i="${i}" placeholder="${i ? '메모 ' + (i + 1) : '예: 회식 7시, 병원 예약'}"${memoStyle(mm.c, true)}>${esc(mm.t)}</textarea>
+        <div class="mrow">
+          <div class="mcolors">${MEMO_COLORS.map(c => `<button class="mc${c.id === mm.c ? ' on' : ''}" data-mc="${c.id}" data-i="${i}" title="${c.name}" aria-label="${c.name}" style="${c.id ? `background:${c.hex}` : ''}">${c.id ? '' : '기본'}</button>`).join('')}</div>
+          ${items.length > 1 || mm.t.trim() ? `<button class="memo-del" data-act="delMemo" data-i="${i}" aria-label="이 메모 지우기">🗑</button>` : ''}
+        </div></div>`).join('')
+      + (items.length < MEMO_MAX ? '<button class="memo-add" data-act="addMemo">+ 메모 추가</button>' : '');
+  }
   function commitDay(key) {
-    const mt = $('#dayMemo'), ht = $('#dayHol');
-    if (mt) {
-      const v = mt.value.trim();
-      if (v) S.memos[key] = v; else delete S.memos[key];
-      if (v && mc) S.memoColors[key] = mc; else delete S.memoColors[key];
-      if (v) S.lastMemoColor = mc;  // 다음 새 메모는 이 색으로 시작
+    const ht = $('#dayHol');
+    if ($('#memoList')) {
+      syncMemos();
+      const list = items.map(mm => ({ t: mm.t.trim(), c: mm.c || '' })).filter(mm => mm.t);
+      if (list.length) { S.memos[key] = list; S.lastMemoColor = list[list.length - 1].c; } else delete S.memos[key];
     }
     if (ht) { const v = ht.value.trim(); if (v) S.holidays[key] = v; else delete S.holidays[key]; }
   }
@@ -719,7 +763,7 @@ async function importBackup(file) {
     const d = JSON.parse(await file.text());
     if (!d || !Array.isArray(d.people) || !Array.isArray(d.types)) throw 0;
     if (!confirm('지금 데이터를 백업 파일 내용으로 바꿀까요?')) return;
-    S = Object.assign(freshState(), d); save(); render(); toast('불러왔어요');
+    S = migrateMemos(Object.assign(freshState(), d)); save(); render(); toast('불러왔어요');
   } catch { toast('백업 파일이 아니에요'); }
 }
 
@@ -871,8 +915,21 @@ function drawFooter(x, W, H) {
 
 function drawCal() {
   const { y, m, startNum, weeks } = monthFrame(), p = me();
-  const W = 1080, P = 28, top = 120, dowH = 54, cellH = 178, cw = (W - P * 2) / 7, statsH = 80, foot = 48;
-  const H = top + dowH + weeks * cellH + statsH + foot;
+  const W = 1080, P = 28, top = 120, dowH = 54, baseH = 178, cw = (W - P * 2) / 7, statsH = 80, foot = 48;
+  // 메모 줄 미리 재기 — 하나면 2줄까지, 여럿이면 하나에 1줄씩(메모가 많은 주는 그 줄만 키운다)
+  const mx = newCanvas(1, 1)[1]; mx.font = `500 19px ${IMG_FONT}`;
+  const blocks = {}, rowH = Array(weeks).fill(baseH);
+  for (let i = 0; i < weeks * 7; i++) {
+    const k = keyFromNum(startNum + i), ms = p ? memosOf(k) : [];
+    if (!ms.length) continue;
+    const b = ms.map(mm => ({ c: memoColor(mm.c), lines: wrapLines(mx, mm.t, cw - 22, ms.length > 1 ? 1 : 2) }));
+    blocks[k] = b;
+    const h = b.reduce((s, bb) => s + bb.lines.length * 24 + 8, 0) + 4 * (b.length - 1);
+    const w = Math.floor(i / 7); rowH[w] = Math.max(rowH[w], 128 + h + 10);
+  }
+  const rowY = rowH.reduce((a, h, i) => (a.push(a[i] + h), a), [0]);  // 각 주의 위쪽(누적)
+  const gridH = rowY[weeks];
+  const H = top + dowH + gridH + statsH + foot;
   const [c, x] = newCanvas(W, H);
   x.textAlign = 'left'; x.fillStyle = IMG.fg; x.font = `800 50px ${IMG_FONT}`; x.fillText(`${y}년 ${m + 1}월`, P, 64);
   x.textAlign = 'right'; x.fillStyle = IMG.sub; x.font = `600 28px ${IMG_FONT}`; x.fillText(`${p ? p.name : ''} 근무표`, W - P, 66);
@@ -883,7 +940,7 @@ function drawCal() {
   const gy = top + dowH;
   for (let i = 0; i < weeks * 7; i++) {
     const k = keyFromNum(startNum + i), { d, m: mm } = parseKey(k), dow = i % 7;
-    const cx = P + cw * dow, cy = gy + cellH * Math.floor(i / 7), hol = holidayOf(k), anni = anniOf(k);
+    const cx = P + cw * dow, cy = gy + rowY[Math.floor(i / 7)], hol = holidayOf(k), anni = anniOf(k);
     x.globalAlpha = mm !== m ? 0.35 : 1;
     if (hol) { x.fillStyle = IMG.holbg; rrect(x, cx + 5, cy + 6, cw - 10, 38, 8); x.fill(); }
     x.textAlign = 'left'; x.font = `700 28px ${IMG_FONT}`;
@@ -896,25 +953,25 @@ function drawCal() {
       x.fillText(fitText(x, lab, cw - nw - 30), cx + cw - 10, cy + 26);
     }
     drawBadge(x, shiftOf(p, k), cx + cw / 2, cy + 84, 36);
-    const memo = S.memos[k];
-    if (memo && p) {
-      x.font = `500 19px ${IMG_FONT}`;
-      const lines = wrapLines(x, memo, cw - 22, 2), mc = memoColor(S.memoColors[k]);
-      const bh = lines.length * 24 + 8, by = cy + 128;
-      x.fillStyle = mc ? mc.hex + '55' : IMG.soft; rrect(x, cx + 6, by, cw - 12, bh, 6); x.fill();
-      if (mc) { x.fillStyle = mc.hex; x.fillRect(cx + 6, by, 4, bh); }
+    let by = cy + 128;
+    x.font = `500 19px ${IMG_FONT}`;
+    for (const b of blocks[k] || []) {
+      const bh = b.lines.length * 24 + 8;
+      x.fillStyle = b.c ? b.c.hex + '55' : IMG.soft; rrect(x, cx + 6, by, cw - 12, bh, 6); x.fill();
+      if (b.c) { x.fillStyle = b.c.hex; x.fillRect(cx + 6, by, 4, bh); }
       x.fillStyle = IMG.fg; x.textAlign = 'left';
-      lines.forEach((ln, j) => x.fillText(ln, cx + 14, by + 16 + j * 24));
+      b.lines.forEach((ln, j) => x.fillText(ln, cx + 14, by + 16 + j * 24));
+      by += bh + 4;
     }
   }
   x.globalAlpha = 1; x.strokeStyle = IMG.line; x.lineWidth = 2;
-  for (let r = 0; r <= weeks; r++) { x.beginPath(); x.moveTo(P, gy + r * cellH); x.lineTo(W - P, gy + r * cellH); x.stroke(); }
-  for (let col = 1; col < 7; col++) { x.beginPath(); x.moveTo(P + cw * col, gy); x.lineTo(P + cw * col, gy + weeks * cellH); x.stroke(); }
+  for (let r = 0; r <= weeks; r++) { x.beginPath(); x.moveTo(P, gy + rowY[r]); x.lineTo(W - P, gy + rowY[r]); x.stroke(); }
+  for (let col = 1; col < 7; col++) { x.beginPath(); x.moveTo(P + cw * col, gy); x.lineTo(P + cw * col, gy + gridH); x.stroke(); }
   // 이달 근무 수
   if (p) {
     const days = new Date(y, m + 1, 0).getDate(), cnt = {};
     for (let d = 1; d <= days; d++) { const s = shiftOf(p, keyOf(y, m, d)); if (s) cnt[s] = (cnt[s] || 0) + 1; }
-    let sx = P, sy = gy + weeks * cellH + statsH / 2;
+    let sx = P, sy = gy + gridH + statsH / 2;
     x.textAlign = 'left'; x.fillStyle = IMG.sub; x.font = `600 24px ${IMG_FONT}`; x.fillText(`${m + 1}월`, sx, sy); sx += 70;
     for (const t of S.types) {
       if (!cnt[t.id]) continue;
