@@ -202,7 +202,7 @@ details summary{cursor:pointer}
 <script>
 'use strict';
 const KEY = 'shiftcal.v1';
-const APP_VER = '2026.10.18-1';  // 설정 맨 아래에 보인다 — 폰에 새 판이 들어왔는지 확인용(고칠 때마다 올리기)
+const APP_VER = '2026.10.18-2';  // 설정 맨 아래에 보인다 — 폰에 새 판이 들어왔는지 확인용(고칠 때마다 올리기)
 
 const DEFAULT_TYPES = [
   { id: 'D', label: '주', name: '주간', color: '#FFD400', kind: 'fill' },
@@ -296,7 +296,7 @@ const MEMO_COLORS = [
 ];
 const memoColor = id => (id && MEMO_COLORS.find(c => c.id === id)) || null;
 // 날짜 메모 = [{t: 글, c: 색}] 최대 MEMO_MAX 개(10-18). 예전 판은 S.memos[k]=글 하나 + S.memoColors[k] → migrateMemos 가 옮긴다
-const MEMO_MAX = 4;
+const MEMO_MAX = 3;  // 10-18 사용자: 4개면 칸에서 글이 안 보여 3개로
 const memosOf = k => (Array.isArray(S.memos[k]) ? S.memos[k] : []);
 function migrateMemos(s) {
   const old = s.memoColors || {};
